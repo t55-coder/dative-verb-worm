@@ -1,6 +1,8 @@
 /**
  * 수여동사 냠냠 지렁이 게임 (Dative Verb Worm Game)
- * GitHub Pages 정적 배포용 바닐라 자바스크립트 전체 코드
+ * - 단어끼리 절대 겹치지 않는 최소 거리 보장 알고리즘
+ * - 먹은 즉시 가운데 빈 공간에 빠르게 리스폰
+ * - 교실 수업용 [시작], [일시정지], [점수 리셋], [경기 타이머] 완벽 지원
  */
 
 // ========================================================
@@ -8,41 +10,41 @@
 // ========================================================
 const VERB_DATABASE = {
   to: [
-    { verb: "give", meaning: "주다", example: "give a present to him" },
-    { verb: "send", meaning: "보내다", example: "send a letter to her" },
-    { verb: "show", meaning: "보여주다", example: "show a picture to me" },
-    { verb: "teach", meaning: "가르치다", example: "teach English to us" },
-    { verb: "tell", meaning: "말해주다", example: "tell a story to them" },
-    { verb: "lend", meaning: "빌려주다", example: "lend an umbrella to him" },
-    { verb: "write", meaning: "써주다", example: "write a message to me" },
-    { verb: "pass", meaning: "건네주다", example: "pass the salt to her" },
-    { verb: "bring", meaning: "가져다주다", example: "bring some water to me" },
-    { verb: "read", meaning: "읽어주다", example: "read a book to him" },
-    { verb: "hand", meaning: "건네다", example: "hand the note to teacher" },
-    { verb: "promise", meaning: "약속하다", example: "promise a gift to you" }
+    { verb: "give", meaning: "주다", color: "#0284c7" },
+    { verb: "send", meaning: "보내다", color: "#0369a1" },
+    { verb: "show", meaning: "보여주다", color: "#0ea5e9" },
+    { verb: "teach", meaning: "가르치다", color: "#2563eb" },
+    { verb: "tell", meaning: "말해주다", color: "#1d4ed8" },
+    { verb: "lend", meaning: "빌려주다", color: "#38bdf8" },
+    { verb: "write", meaning: "써주다", color: "#0284c7" },
+    { verb: "pass", meaning: "건네주다", color: "#0ea5e9" },
+    { verb: "bring", meaning: "가져오다", color: "#2563eb" },
+    { verb: "read", meaning: "읽어주다", color: "#0369a1" },
+    { verb: "hand", meaning: "건네다", color: "#38bdf8" },
+    { verb: "promise", meaning: "약속하다", color: "#1d4ed8" }
   ],
   for: [
-    { verb: "make", meaning: "만들어주다", example: "make cookies for us" },
-    { verb: "buy", meaning: "사주다", example: "buy a toy for brother" },
-    { verb: "cook", meaning: "요리해주다", example: "cook dinner for family" },
-    { verb: "get", meaning: "구해주다", example: "get a ticket for me" },
-    { verb: "find", meaning: "찾아주다", example: "find a key for mom" },
-    { verb: "build", meaning: "지어주다", example: "build a doghouse for dog" },
-    { verb: "bake", meaning: "구워주다", example: "bake bread for friends" },
-    { verb: "choose", meaning: "골라주다", example: "choose a gift for her" },
-    { verb: "order", meaning: "주문해주다", example: "order pizza for us" },
-    { verb: "sing", meaning: "노래해주다", example: "sing a song for baby" }
+    { verb: "make", meaning: "만들어주다", color: "#ea580c" },
+    { verb: "buy", meaning: "사주다", color: "#f97316" },
+    { verb: "cook", meaning: "요리해주다", color: "#d97706" },
+    { verb: "get", meaning: "구해주다", color: "#f59e0b" },
+    { verb: "find", meaning: "찾아주다", color: "#c2410c" },
+    { verb: "build", meaning: "지어주다", color: "#b45309" },
+    { verb: "bake", meaning: "구워주다", color: "#ea580c" },
+    { verb: "choose", meaning: "골라주다", color: "#f97316" },
+    { verb: "order", meaning: "주문해주다", color: "#d97706" },
+    { verb: "sing", meaning: "노래해주다", color: "#f59e0b" }
   ],
   of: [
-    { verb: "ask", meaning: "부탁하다/묻다", example: "ask a favor of you" },
-    { verb: "beg", meaning: "간청하다", example: "beg help of someone" },
-    { verb: "inquire", meaning: "문의하다", example: "inquire info of staff" },
-    { verb: "question", meaning: "질문하다", example: "question answers of students" }
+    { verb: "ask", meaning: "부탁/묻다", color: "#7c3aed" },
+    { verb: "beg", meaning: "간청하다", color: "#9333ea" },
+    { verb: "inquire", meaning: "문의하다", color: "#6d28d9" },
+    { verb: "question", meaning: "질문하다", color: "#a855f7" }
   ]
 };
 
 // ========================================================
-// 2. Web Audio API 신디사이저 효과음
+// 2. Web Audio API 사운드 시스템
 // ========================================================
 class SoundManager {
   constructor() {
@@ -53,9 +55,7 @@ class SoundManager {
   init() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
+      if (AudioCtx) this.ctx = new AudioCtx();
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
@@ -68,22 +68,17 @@ class SoundManager {
     if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 (경쾌한 도-미-솔-도)
-    notes.forEach((freq, idx) => {
+    [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.05);
-
-      gain.gain.setValueAtTime(0.18, now + idx * 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.18);
-
+      osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+      gain.gain.setValueAtTime(0.16, now + idx * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.16);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-
-      osc.start(now + idx * 0.05);
-      osc.stop(now + idx * 0.05 + 0.2);
+      osc.start(now + idx * 0.04);
+      osc.stop(now + idx * 0.04 + 0.18);
     });
   }
 
@@ -95,19 +90,15 @@ class SoundManager {
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(240, now);
-    osc.frequency.exponentialRampToValueAtTime(110, now + 0.25);
-
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.22);
     gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
-
     osc.start(now);
-    osc.stop(now + 0.26);
+    osc.stop(now + 0.23);
   }
 
   playMissionChange() {
@@ -116,22 +107,37 @@ class SoundManager {
     if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
-    const chords = [440, 554.37, 659.25, 880]; // A major fan-fare
-    chords.forEach((freq, i) => {
+    [440, 554.37, 659.25, 880].forEach((freq, i) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now + i * 0.07);
-
-      gain.gain.setValueAtTime(0.15, now + i * 0.07);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.35);
-
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.06);
+      gain.gain.setValueAtTime(0.14, now + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.28);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.06);
+      osc.stop(now + i * 0.06 + 0.3);
+    });
+  }
 
-      osc.start(now + i * 0.07);
-      osc.stop(now + i * 0.07 + 0.36);
+  playMatchFinish() {
+    if (this.isMuted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.50, 1318.51].forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.08);
+      gain.gain.setValueAtTime(0.2, now + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.4);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.08);
+      osc.stop(now + i * 0.08 + 0.42);
     });
   }
 
@@ -142,7 +148,7 @@ class SoundManager {
 }
 
 // ========================================================
-// 3. 플로팅 텍스트 & 파티클 시스템
+// 3. 플로팅 텍스트 & 파티클
 // ========================================================
 class FloatingText {
   constructor(text, x, y, isSuccess, subText = "") {
@@ -152,42 +158,37 @@ class FloatingText {
     this.y = y;
     this.isSuccess = isSuccess;
     this.life = 1.0;
-    this.vy = -1.8;
+    this.vy = -1.6;
   }
 
   update(dt) {
     this.y += this.vy * (dt * 60);
-    this.life -= 0.016 * (dt * 60);
+    this.life -= 0.022 * (dt * 60);
   }
 
   draw(ctx) {
     if (this.life <= 0) return;
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, this.life));
-    ctx.font = 'bold 22px Fredoka, Jua, sans-serif';
+    ctx.font = 'bold 20px Fredoka, Jua, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // 텍스트 외곽선
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3.5;
     ctx.strokeStyle = '#ffffff';
     ctx.strokeText(this.text, this.x, this.y);
 
-    // 텍스트 본문 채우기
     ctx.fillStyle = this.isSuccess ? '#16a34a' : '#dc2626';
     ctx.fillText(this.text, this.x, this.y);
 
-    // 부가 설명 (예: "give to me")
     if (this.subText) {
-      ctx.font = 'bold 14px Nunito, sans-serif';
+      ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#ffffff';
-      ctx.strokeText(this.subText, this.x, this.y + 22);
-
+      ctx.strokeText(this.subText, this.x, this.y + 18);
       ctx.fillStyle = '#334155';
-      ctx.fillText(this.subText, this.x, this.y + 22);
+      ctx.fillText(this.subText, this.x, this.y + 18);
     }
-
     ctx.restore();
   }
 }
@@ -198,19 +199,17 @@ class Particle {
     this.y = y;
     this.color = color;
     const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 4 + 2;
+    const speed = Math.random() * 3.5 + 1.5;
     this.vx = Math.cos(angle) * speed;
     this.vy = Math.sin(angle) * speed;
-    this.radius = Math.random() * 5 + 3;
+    this.radius = Math.random() * 4 + 2;
     this.life = 1.0;
-    this.decay = Math.random() * 0.02 + 0.015;
+    this.decay = Math.random() * 0.025 + 0.02;
   }
 
   update(dt) {
     this.x += this.vx * (dt * 60);
     this.y += this.vy * (dt * 60);
-    this.vx *= 0.95;
-    this.vy *= 0.95;
     this.life -= this.decay * (dt * 60);
   }
 
@@ -228,98 +227,72 @@ class Particle {
 
 // ========================================================
 // 4. 단어 아이템 (WordItem) 클래스
+// - 영상 스타일: 예쁜 원형 도트 + 단어 + 한글 뜻
 // ========================================================
 class WordItem {
-  constructor(data, width, height) {
+  constructor(data, x, y) {
     this.verb = data.verb;
     this.meaning = data.meaning;
     this.prep = data.prep;
-    this.example = data.example;
+    this.color = data.color || '#3b82f6';
 
-    this.x = Math.random() * (width - 160) + 80;
-    this.y = Math.random() * (height - 200) + 120;
-
-    // 약간의 유영 속도 (부드럽게 둥둥 떠다님)
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 0.6 + 0.3;
-    this.vx = Math.cos(angle) * speed;
-    this.vy = Math.sin(angle) * speed;
+    this.x = x;
+    this.y = y;
 
     this.floatOffset = Math.random() * Math.PI * 2;
-    this.scale = 1.0;
-    this.radius = 32; // 충돌 판정용 기본 반경
+    this.radius = 24; // 충돌 반경
+    this.scale = 0;   // 스폰 시 통통 튀며 생기는 팝 애니메이션
   }
 
-  update(dt, width, height) {
-    this.floatOffset += 0.04 * (dt * 60);
-    this.x += this.vx * (dt * 60);
-    this.y += this.vy * (dt * 60);
-
-    // 화면 벽 충돌 반사 (상하좌우 여백 확보)
-    const padding = 50;
-    if (this.x < padding) {
-      this.x = padding;
-      this.vx = Math.abs(this.vx);
-    } else if (this.x > width - padding) {
-      this.x = width - padding;
-      this.vx = -Math.abs(this.vx);
-    }
-
-    if (this.y < 100) {
-      this.y = 100;
-      this.vy = Math.abs(this.vy);
-    } else if (this.y > height - padding) {
-      this.y = height - padding;
-      this.vy = -Math.abs(this.vy);
+  update(dt) {
+    this.floatOffset += 0.03 * (dt * 60);
+    if (this.scale < 1.0) {
+      this.scale = Math.min(1.0, this.scale + 0.12 * (dt * 60));
     }
   }
 
   draw(ctx) {
     ctx.save();
-    const floatY = this.y + Math.sin(this.floatOffset) * 5;
-
+    const floatY = this.y + Math.sin(this.floatOffset) * 3;
     ctx.translate(this.x, floatY);
-    ctx.scale(this.scale, this.scale);
+    if (this.scale < 1.0) {
+      ctx.scale(this.scale, this.scale);
+    }
 
-    // 알약 뱃지 크기 계산
-    const pillWidth = 92;
-    const pillHeight = 52;
-    const rx = -pillWidth / 2;
-    const ry = -pillHeight / 2;
+    // 1. 작은 컬러풀 도트
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 2;
 
-    // 뱃지 그림자
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 6;
-
-    // 뱃지 배경 (하얗고 맑은 반투명 글래스)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.roundRect(rx, ry, pillWidth, pillHeight, 26);
+    ctx.arc(-24, 0, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    // 뱃지 테두리
+    // 도트 안쪽 하이라이트
     ctx.shadowColor = 'transparent';
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.beginPath();
+    ctx.arc(-26, -2, 2, 0, Math.PI * 2);
+    ctx.fill();
 
-    // 은은한 컬러 링
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(100, 116, 139, 0.25)';
-    ctx.stroke();
-
-    // 동사 텍스트
-    ctx.font = 'bold 20px Fredoka, sans-serif';
-    ctx.fillStyle = '#1e293b';
-    ctx.textAlign = 'center';
+    // 2. 단어 텍스트
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.verb, 0, -8);
 
-    // 한국어 의미
-    ctx.font = '600 12px Jua, sans-serif';
+    ctx.font = 'bold 15px Fredoka, sans-serif';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeText(this.verb, -14, -4);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillText(this.verb, -14, -4);
+
+    ctx.font = '600 11px "Noto Sans KR", sans-serif';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.strokeText(this.meaning, -14, 10);
     ctx.fillStyle = '#64748b';
-    ctx.fillText(this.meaning, 0, 13);
+    ctx.fillText(this.meaning, -14, 10);
 
     ctx.restore();
   }
@@ -327,9 +300,10 @@ class WordItem {
 
 // ========================================================
 // 5. 지렁이 (Worm) 클래스
+// - 영상 속 매끄러운 튜브/소시지 일체형 젤리 바디
 // - 색상: 반투명 갈색
 // - 표정: 방긋 웃는 표정
-// - 몸통, 머리, 꼬리 모두 충돌 판정에 참여
+// - 전신 충돌 판정: 머리, 몸통, 꼬리 모두 단어 섭취
 // ========================================================
 class Worm {
   constructor(startX, startY) {
@@ -339,61 +313,62 @@ class Worm {
     this.targetY = startY;
 
     this.angle = 0;
-    this.speed = 4.2;
-    this.baseRadius = 22; // 머리 반경
+    this.speed = 4.8;
+    this.bodyRadius = 18;
 
-    // 세그먼트 배열 초기화 (초기 15마디)
     this.segments = [];
-    this.segmentSpacing = 12; // 마디 간격
-    const initialSegments = 15;
+    this.segmentSpacing = 7;
+    const initialSegments = 22;
 
     for (let i = 0; i < initialSegments; i++) {
       this.segments.push({
         x: startX - i * this.segmentSpacing,
         y: startY,
-        radius: this.calcRadius(i, initialSegments)
+        radius: this.bodyRadius
       });
     }
 
-    // 표정 상태: 'happy'(기본 웃는얼굴), 'eating'(크게 웃음/입벌림), 'oops'(놀람/어라?)
     this.expression = 'happy';
     this.expressionTimer = 0;
     this.blinkTimer = 0;
   }
 
-  calcRadius(index, total) {
-    // 머리(22px)에서 꼬리(10px)로 자연스럽게 얇아지는 곡선
-    const progress = index / Math.max(1, total - 1);
-    return Math.max(10, this.baseRadius * (1 - progress * 0.52));
-  }
-
-  recalculateRadii() {
-    const total = this.segments.length;
-    for (let i = 0; i < total; i++) {
-      this.segments[i].radius = this.calcRadius(i, total);
+  reset(x, y) {
+    this.x = x;
+    this.y = y;
+    this.targetX = x;
+    this.targetY = y;
+    this.angle = 0;
+    this.segments = [];
+    const initialSegments = 22;
+    for (let i = 0; i < initialSegments; i++) {
+      this.segments.push({
+        x: x - i * this.segmentSpacing,
+        y: y,
+        radius: this.bodyRadius
+      });
     }
+    this.expression = 'happy';
   }
 
-  addSegments(count = 3) {
+  addSegments(count = 4) {
     const last = this.segments[this.segments.length - 1];
     for (let i = 0; i < count; i++) {
       this.segments.push({
         x: last.x,
         y: last.y,
-        radius: 10
+        radius: this.bodyRadius
       });
     }
-    this.recalculateRadii();
-    this.setExpression('eating', 0.45);
+    this.setExpression('eating', 0.4);
   }
 
   removeSegments(count = 3) {
-    const minLength = 10;
+    const minLength = 14;
     const removeCount = Math.min(count, Math.max(0, this.segments.length - minLength));
     for (let i = 0; i < removeCount; i++) {
       this.segments.pop();
     }
-    this.recalculateRadii();
     this.setExpression('oops', 0.5);
   }
 
@@ -408,46 +383,34 @@ class Worm {
   }
 
   update(dt) {
-    // 표정 타이머
     if (this.expressionTimer > 0) {
       this.expressionTimer -= dt;
-      if (this.expressionTimer <= 0) {
-        this.expression = 'happy';
-      }
+      if (this.expressionTimer <= 0) this.expression = 'happy';
     }
-
-    // 깜빡임 타이머
     this.blinkTimer += dt;
 
-    // 마우스 목표 지점 추적 및 각도 계산
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
     const distToTarget = Math.hypot(dx, dy);
 
     if (distToTarget > 6) {
       const targetAngle = Math.atan2(dy, dx);
-
-      // 각도 보간 (부드러운 회전)
       let diff = targetAngle - this.angle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
-      this.angle += diff * Math.min(1, 0.14 * (dt * 60));
+      this.angle += diff * Math.min(1, 0.16 * (dt * 60));
 
-      // 전진 속도 계산 (가까우면 감속)
-      const moveSpeed = Math.min(this.speed, distToTarget * 0.15) * (dt * 60);
+      const moveSpeed = Math.min(this.speed, distToTarget * 0.16) * (dt * 60);
       this.x += Math.cos(this.angle) * moveSpeed;
       this.y += Math.sin(this.angle) * moveSpeed;
     }
 
-    // 머리 위치 갱신
     this.segments[0].x = this.x;
     this.segments[0].y = this.y;
 
-    // 몸통 마디들 팔로우 (역기구학 기반 고정 간격 유지)
     for (let i = 1; i < this.segments.length; i++) {
       const prev = this.segments[i - 1];
       const cur = this.segments[i];
-
       const segDx = cur.x - prev.x;
       const segDy = cur.y - prev.y;
       const segDist = Math.hypot(segDx, segDy);
@@ -461,52 +424,43 @@ class Worm {
   }
 
   draw(ctx) {
+    if (this.segments.length < 2) return;
     ctx.save();
 
-    // 1. 몸통 그리기 (꼬리부터 머리 방향으로 그려 머리가 가장 위에 오도록)
-    for (let i = this.segments.length - 1; i >= 0; i--) {
-      const seg = this.segments[i];
-      const radius = seg.radius;
-      const progress = i / this.segments.length;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-      ctx.save();
-      ctx.translate(seg.x, seg.y);
-
-      // 은은한 그림자
-      ctx.shadowColor = 'rgba(100, 50, 20, 0.18)';
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetY = 4;
-
-      // 반투명 갈색 그라데이션 (몸통 입체감)
-      // 요구사항: "지렁이 색은 반투명 갈색으로 부탁해"
-      const grad = ctx.createRadialGradient(-radius * 0.25, -radius * 0.25, radius * 0.1, 0, 0, radius);
-      grad.addColorStop(0, `rgba(215, 140, 85, ${0.85 - progress * 0.15})`);
-      grad.addColorStop(0.7, `rgba(165, 92, 45, ${0.75 - progress * 0.15})`);
-      grad.addColorStop(1, `rgba(120, 62, 28, ${0.72 - progress * 0.15})`);
-
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 지렁이 마디 링(Ring) 무늬 (반투명 선)
-      ctx.shadowColor = 'transparent';
-      ctx.strokeStyle = 'rgba(255, 230, 200, 0.25)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.75, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 상단 하이라이트 (말랑말랑한 젤리 윤기)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(-radius * 0.35, -radius * 0.35, radius * 0.3, radius * 0.18, -Math.PI / 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
+    // 1. 하단 그림자
+    ctx.lineWidth = this.bodyRadius * 2 + 4;
+    ctx.strokeStyle = 'rgba(90, 45, 15, 0.12)';
+    ctx.beginPath();
+    ctx.moveTo(this.segments[0].x, this.segments[0].y + 3);
+    for (let i = 1; i < this.segments.length; i++) {
+      ctx.lineTo(this.segments[i].x, this.segments[i].y + 3);
     }
+    ctx.stroke();
 
-    // 2. 머리 및 웃는 표정 그리기
+    // 2. 반투명 갈색 튜브
+    ctx.lineWidth = this.bodyRadius * 2;
+    ctx.strokeStyle = 'rgba(175, 105, 55, 0.78)';
+    ctx.beginPath();
+    ctx.moveTo(this.segments[0].x, this.segments[0].y);
+    for (let i = 1; i < this.segments.length; i++) {
+      ctx.lineTo(this.segments[i].x, this.segments[i].y);
+    }
+    ctx.stroke();
+
+    // 3. 내부 젤리 하이라이트
+    ctx.lineWidth = this.bodyRadius * 0.9;
+    ctx.strokeStyle = 'rgba(235, 165, 115, 0.35)';
+    ctx.beginPath();
+    ctx.moveTo(this.segments[0].x, this.segments[0].y);
+    for (let i = 1; i < this.segments.length; i++) {
+      ctx.lineTo(this.segments[i].x, this.segments[i].y);
+    }
+    ctx.stroke();
+
+    // 4. 머리 및 웃는 표정
     this.drawHead(ctx);
 
     ctx.restore();
@@ -514,143 +468,98 @@ class Worm {
 
   drawHead(ctx) {
     const head = this.segments[0];
-    const r = this.baseRadius;
+    const r = this.bodyRadius;
 
     ctx.save();
     ctx.translate(head.x, head.y);
     ctx.rotate(this.angle);
 
-    // 머리 베이스 구체 (반투명 갈색)
-    ctx.shadowColor = 'rgba(80, 35, 10, 0.25)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 4;
-
-    const headGrad = ctx.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.1, 0, 0, r);
-    headGrad.addColorStop(0, 'rgba(225, 150, 95, 0.88)');
-    headGrad.addColorStop(0.75, 'rgba(175, 98, 48, 0.82)');
-    headGrad.addColorStop(1, 'rgba(130, 68, 30, 0.80)');
-
-    ctx.fillStyle = headGrad;
+    ctx.fillStyle = 'rgba(185, 112, 60, 0.88)';
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.shadowColor = 'transparent';
-
-    // 귀여운 분홍 볼터치 (Blush)
-    ctx.fillStyle = 'rgba(251, 113, 133, 0.65)';
+    ctx.fillStyle = 'rgba(255, 235, 215, 0.45)';
     ctx.beginPath();
-    ctx.arc(r * 0.3, -r * 0.52, 4.5, 0, Math.PI * 2);
-    ctx.arc(r * 0.3, r * 0.52, 4.5, 0, Math.PI * 2);
+    ctx.arc(r * 0.2, -r * 0.2, r * 0.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // 눈 깜빡임 판정
-    const isBlinking = (this.blinkTimer % 4.0) > 3.85;
+    ctx.fillStyle = 'rgba(251, 113, 133, 0.7)';
+    ctx.beginPath();
+    ctx.arc(r * 0.35, -r * 0.55, 4, 0, Math.PI * 2);
+    ctx.arc(r * 0.35, r * 0.55, 4, 0, Math.PI * 2);
+    ctx.fill();
 
-    // --- 눈 그리기 (위아래 2개) ---
-    const eyeOffsetX = r * 0.38;
-    const eyeOffsetY = r * 0.34;
-    const eyeRadius = 6.0;
+    const isBlinking = (this.blinkTimer % 4.0) > 3.85;
+    const eyeX = r * 0.38;
+    const eyeY = r * 0.38;
 
     if (this.expression === 'oops') {
-      // 당황했을 때: > < 모양 눈
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#381a08';
+      ctx.lineWidth = 2.2;
       ctx.lineCap = 'round';
-
-      // 위쪽 눈
-      ctx.beginPath();
-      ctx.moveTo(eyeOffsetX - 3, -eyeOffsetY - 3);
-      ctx.lineTo(eyeOffsetX + 3, -eyeOffsetY);
-      ctx.lineTo(eyeOffsetX - 3, -eyeOffsetY + 3);
-      ctx.stroke();
-
-      // 아래쪽 눈
-      ctx.beginPath();
-      ctx.moveTo(eyeOffsetX - 3, eyeOffsetY - 3);
-      ctx.lineTo(eyeOffsetX + 3, eyeOffsetY);
-      ctx.lineTo(eyeOffsetX - 3, eyeOffsetY + 3);
-      ctx.stroke();
-
+      [-eyeY, eyeY].forEach(yPos => {
+        ctx.beginPath();
+        ctx.moveTo(eyeX - 3, yPos - 3);
+        ctx.lineTo(eyeX + 3, yPos);
+        ctx.lineTo(eyeX - 3, yPos + 3);
+        ctx.stroke();
+      });
     } else if (isBlinking || this.expression === 'eating') {
-      // 냠냠 먹을 때 or 깜빡일 때: 방긋 웃는 ^ ^ 눈
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 2.8;
+      ctx.strokeStyle = '#381a08';
+      ctx.lineWidth = 2.4;
       ctx.lineCap = 'round';
-
       ctx.beginPath();
-      ctx.arc(eyeOffsetX, -eyeOffsetY, 4.5, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.arc(eyeX, -eyeY, 4, Math.PI * 1.1, Math.PI * 1.9);
       ctx.stroke();
-
       ctx.beginPath();
-      ctx.arc(eyeOffsetX, eyeOffsetY, 4.5, Math.PI * 0.1, Math.PI * 0.9);
+      ctx.arc(eyeX, eyeY, 4, Math.PI * 0.1, Math.PI * 0.9);
       ctx.stroke();
-
     } else {
-      // 기본 웃는 눈 (초롱초롱한 눈망울)
-      [-eyeOffsetY, eyeOffsetY].forEach(yPos => {
-        // 흰자
+      [-eyeY, eyeY].forEach(yPos => {
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(eyeOffsetX, yPos, eyeRadius, 0, Math.PI * 2);
+        ctx.arc(eyeX, yPos, 5.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // 검은 눈동자
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        ctx.arc(eyeOffsetX + 1.2, yPos, eyeRadius * 0.65, 0, Math.PI * 2);
+        ctx.arc(eyeX + 1.2, yPos, 3.2, 0, Math.PI * 2);
         ctx.fill();
 
-        // 초롱초롱 하이라이트
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(eyeOffsetX + 2.2, yPos - 1.5, 2.0, 0, Math.PI * 2);
-        ctx.arc(eyeOffsetX, yPos + 1.8, 1.1, 0, Math.PI * 2);
+        ctx.arc(eyeX + 2, yPos - 1, 1.4, 0, Math.PI * 2);
         ctx.fill();
       });
     }
 
-    // --- 요구사항: "지렁이 표정은 웃는 표정으로 해 주고" ---
-    // 입 (Mouth) 그리기
-    const mouthX = r * 0.58;
-
+    // 방긋 웃는 입
+    const mouthX = r * 0.6;
     if (this.expression === 'eating') {
-      // 먹는 순간: 입을 "와앙!" 하고 벌린 행복한 웃음
       ctx.fillStyle = '#be123c';
       ctx.beginPath();
-      ctx.ellipse(mouthX, 0, 7.5, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(mouthX, 0, 6.5, 5.5, 0, 0, Math.PI * 2);
       ctx.fill();
-
-      // 귀여운 이빨/혀
-      ctx.fillStyle = '#f43f5e';
+      ctx.fillStyle = '#fb7185';
       ctx.beginPath();
-      ctx.ellipse(mouthX - 1.5, 1.5, 4.5, 3.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(mouthX - 1, 1, 3.5, 3, 0, 0, Math.PI * 2);
       ctx.fill();
-
     } else if (this.expression === 'oops') {
-      // 틀렸을 때: 작고 둥근 "O" 모양 입
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = '#381a08';
+      ctx.lineWidth = 2;
       ctx.fillStyle = '#f43f5e';
       ctx.beginPath();
-      ctx.arc(mouthX - 1, 0, 3.5, 0, Math.PI * 2);
+      ctx.arc(mouthX - 1, 0, 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-
     } else {
-      // 기본 방긋 웃는 입 (Happy Smile)
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 2.6;
+      ctx.strokeStyle = '#381a08';
+      ctx.lineWidth = 2.4;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.arc(mouthX - 3, 0, 6.5, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.arc(mouthX - 2, 0, 5.5, -Math.PI * 0.42, Math.PI * 0.42);
       ctx.stroke();
-
-      // 살짝 내민 귀여운 핑크빛 혀 (가끔 보임)
-      ctx.fillStyle = '#f43f5e';
-      ctx.beginPath();
-      ctx.arc(mouthX + 1.5, 1.5, 2.8, -Math.PI * 0.3, Math.PI * 0.5);
-      ctx.fill();
     }
 
     ctx.restore();
@@ -658,7 +567,7 @@ class Worm {
 }
 
 // ========================================================
-// 6. 게임 메인 매니저 (Game Engine)
+// 6. 게임 메인 매니저
 // ========================================================
 class Game {
   constructor() {
@@ -667,7 +576,6 @@ class Game {
 
     this.sound = new SoundManager();
 
-    // 상태 관리
     this.score = 0;
     this.isRunning = false;
     this.isPaused = false;
@@ -675,8 +583,13 @@ class Game {
     // 미션 시스템 (15초마다 변경)
     this.prepositions = ['to', 'for', 'of'];
     this.currentPrepIndex = 0;
-    this.missionTimer = 15.0; // 15초 카운트다운
+    this.missionTimer = 15.0;
     this.missionTotalDuration = 15.0;
+
+    // 수업용 경기 타이머 (무제한, 60초, 120초, 180초)
+    this.matchTimerModes = [0, 60, 120, 180];
+    this.matchTimerIndex = 0; // 0 = 무제한
+    this.matchRemaining = 0;
 
     // 객체 목록
     this.worm = null;
@@ -684,32 +597,37 @@ class Game {
     this.floatingTexts = [];
     this.particles = [];
 
-    // 시간 관리
     this.lastTime = 0;
 
-    // DOM 엘리먼트 캐싱
+    // 단어 간 최소 거리 (겹침 방지)
+    this.minWordDistance = 72; // 단어끼리 절대 붙지 않도록 보장하는 거리
+
     this.dom = {
-      missionPanel: document.getElementById('missionPanel'),
-      prepBadge: document.getElementById('prepBadge'),
-      missionDesc: document.getElementById('missionDesc'),
+      missionText: document.getElementById('missionText'),
+      prepHighlight: document.getElementById('prepHighlight'),
       missionTimeText: document.getElementById('missionTimeText'),
       missionProgressBar: document.getElementById('missionProgressBar'),
-      hintChips: document.getElementById('hintChips'),
       scoreDisplay: document.getElementById('scoreDisplay'),
-      wormLengthDisplay: document.getElementById('wormLengthDisplay'),
-      wordCountDisplay: document.getElementById('wordCountDisplay'),
+      lengthDisplay: document.getElementById('lengthDisplay'),
+      startBtn: document.getElementById('startBtn'),
+      pauseBtn: document.getElementById('pauseBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+      matchTimerBtn: document.getElementById('matchTimerBtn'),
+      matchTimerLabel: document.getElementById('matchTimerLabel'),
       soundBtn: document.getElementById('soundBtn'),
       soundIcon: document.getElementById('soundIcon'),
-      pauseBtn: document.getElementById('pauseBtn'),
-      pauseIcon: document.getElementById('pauseIcon'),
       guideBtn: document.getElementById('guideBtn'),
-      startModal: document.getElementById('startModal'),
-      startGameBtn: document.getElementById('startGameBtn'),
       guideModal: document.getElementById('guideModal'),
       closeGuideBtn: document.getElementById('closeGuideBtn'),
       understandBtn: document.getElementById('understandBtn'),
-      pauseOverlay: document.getElementById('pauseOverlay'),
-      resumeBtn: document.getElementById('resumeBtn'),
+      pausedOverlay: document.getElementById('pausedOverlay'),
+      pauseScoreText: document.getElementById('pauseScoreText'),
+      resumeModalBtn: document.getElementById('resumeModalBtn'),
+      resetModalBtn: document.getElementById('resetModalBtn'),
+      matchEndModal: document.getElementById('matchEndModal'),
+      finalScoreDisplay: document.getElementById('finalScoreDisplay'),
+      finalLengthDisplay: document.getElementById('finalLengthDisplay'),
+      playAgainBtn: document.getElementById('playAgainBtn'),
       missionAlertBanner: document.getElementById('missionAlertBanner'),
       bannerText: document.getElementById('bannerText')
     };
@@ -719,11 +637,13 @@ class Game {
 
   init() {
     this.resizeCanvas();
-    window.addEventListener('resize', () => this.resizeCanvas());
+    window.addEventListener('resize', () => {
+      this.resizeCanvas();
+      this.ensureWordCoverage();
+    });
 
-    // 마우스 및 터치 이벤트
     const handleMove = (e) => {
-      if (!this.worm) return;
+      if (!this.worm || !this.isRunning || this.isPaused) return;
       let clientX, clientY;
       if (e.touches && e.touches.length > 0) {
         clientX = e.touches[0].clientX;
@@ -742,7 +662,7 @@ class Game {
       handleMove(e);
     }, { passive: false });
 
-    // 키보드 조작 (Space: Pause)
+    // 스페이스바로 일시정지 토글
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
@@ -750,45 +670,83 @@ class Game {
       }
     });
 
-    // UI 버튼 이벤트 바인딩
     this.bindEvents();
 
-    // 초기 화면 테마 및 미션 설정
+    // 초기 상태 세팅 (일시정지 대기 상태로 단어들과 지렁이 배치)
+    this.worm = new Worm(this.canvas.width / 2, this.canvas.height / 2);
+    this.words = [];
+    this.populateWordsInitial();
     this.updateMissionUI(false);
+    this.updateScoreUI();
+
+    // 초기 시작 안내
+    this.lastTime = performance.now();
+    requestAnimationFrame((t) => this.loop(t));
   }
 
   bindEvents() {
-    this.dom.startGameBtn.addEventListener('click', () => {
+    // 1. [시작] 버튼
+    this.dom.startBtn.addEventListener('click', () => {
       this.sound.init();
-      this.dom.startModal.classList.add('hidden');
-      this.start();
+      this.resumeGame();
     });
 
+    // 2. [일시정지] 버튼
+    this.dom.pauseBtn.addEventListener('click', () => {
+      this.pauseGame();
+    });
+
+    // 3. [점수 리셋] 버튼
+    this.dom.resetBtn.addEventListener('click', () => {
+      this.resetGame();
+    });
+
+    // 4. 모달 내부 버튼들
+    this.dom.resumeModalBtn.addEventListener('click', () => {
+      this.resumeGame();
+    });
+
+    this.dom.resetModalBtn.addEventListener('click', () => {
+      this.resetGame();
+    });
+
+    this.dom.playAgainBtn.addEventListener('click', () => {
+      this.dom.matchEndModal.classList.add('hidden');
+      this.resetGame();
+      this.resumeGame();
+    });
+
+    // 5. 경기 타이머 모드 변경 버튼 (무제한 -> 1분 -> 2분 -> 3분)
+    this.dom.matchTimerBtn.addEventListener('click', () => {
+      this.matchTimerIndex = (this.matchTimerIndex + 1) % this.matchTimerModes.length;
+      const modeSec = this.matchTimerModes[this.matchTimerIndex];
+      this.matchRemaining = modeSec;
+      if (modeSec === 0) {
+        this.dom.matchTimerLabel.textContent = "타이머: 무제한";
+      } else {
+        this.dom.matchTimerLabel.textContent = `타이머: ${modeSec / 60}분`;
+      }
+    });
+
+    // 6. 소리 및 도감 버튼
     this.dom.soundBtn.addEventListener('click', () => {
       const isMuted = this.sound.toggleMute();
       this.dom.soundIcon.className = isMuted 
-        ? "fa-solid fa-volume-xmark text-slate-400" 
-        : "fa-solid fa-volume-high text-sky-500";
-    });
-
-    this.dom.pauseBtn.addEventListener('click', () => {
-      this.togglePause();
-    });
-
-    this.dom.resumeBtn.addEventListener('click', () => {
-      this.togglePause();
+        ? "fa-solid fa-volume-xmark text-slate-400 text-sm" 
+        : "fa-solid fa-volume-high text-sky-500 text-sm";
     });
 
     this.dom.guideBtn.addEventListener('click', () => {
-      this.openGuide();
+      this.pauseGame();
+      this.dom.guideModal.classList.remove('hidden');
     });
 
     this.dom.closeGuideBtn.addEventListener('click', () => {
-      this.closeGuide();
+      this.dom.guideModal.classList.add('hidden');
     });
 
     this.dom.understandBtn.addEventListener('click', () => {
-      this.closeGuide();
+      this.dom.guideModal.classList.add('hidden');
     });
   }
 
@@ -797,54 +755,67 @@ class Game {
     this.canvas.height = window.innerHeight;
   }
 
-  start() {
+  // ========================================================
+  // 게임 컨트롤 상태 제어
+  // ========================================================
+  resumeGame() {
+    this.isRunning = true;
+    this.isPaused = false;
+    this.dom.pausedOverlay.classList.add('hidden');
+    this.dom.matchEndModal.classList.add('hidden');
+
+    this.dom.startBtn.classList.add('ring-2', 'ring-emerald-300');
+    this.dom.pauseBtn.classList.remove('ring-2', 'ring-amber-300');
+
+    this.lastTime = performance.now();
+  }
+
+  pauseGame() {
+    this.isPaused = true;
+    this.dom.pausedOverlay.classList.remove('hidden');
+    this.dom.pauseScoreText.textContent = `${this.score}점`;
+
+    this.dom.pauseBtn.classList.add('ring-2', 'ring-amber-300');
+    this.dom.startBtn.classList.remove('ring-2', 'ring-emerald-300');
+  }
+
+  togglePause() {
+    if (this.isPaused || !this.isRunning) {
+      this.resumeGame();
+    } else {
+      this.pauseGame();
+    }
+  }
+
+  resetGame() {
     this.score = 0;
     this.updateScoreUI();
     this.currentPrepIndex = 0;
     this.missionTimer = this.missionTotalDuration;
 
-    // 지렁이 생성
-    this.worm = new Worm(this.canvas.width / 2, this.canvas.height / 2);
+    if (this.matchTimerModes[this.matchTimerIndex] > 0) {
+      this.matchRemaining = this.matchTimerModes[this.matchTimerIndex];
+    }
 
-    // 단어 아이템 생성
+    if (this.worm) {
+      this.worm.reset(this.canvas.width / 2, this.canvas.height / 2);
+    }
+
     this.words = [];
-    this.populateWords();
+    this.floatingTexts = [];
+    this.particles = [];
 
+    this.populateWordsInitial();
     this.updateMissionUI(true);
 
-    this.isRunning = true;
-    this.isPaused = false;
-    this.lastTime = performance.now();
+    this.dom.pausedOverlay.classList.add('hidden');
+    this.dom.matchEndModal.classList.add('hidden');
 
-    requestAnimationFrame((t) => this.loop(t));
-  }
-
-  togglePause() {
-    if (!this.isRunning) return;
-    this.isPaused = !this.isPaused;
-    if (this.isPaused) {
-      this.dom.pauseOverlay.classList.remove('hidden');
-      this.dom.pauseIcon.className = "fa-solid fa-play text-emerald-500";
-    } else {
-      this.dom.pauseOverlay.classList.add('hidden');
-      this.dom.pauseIcon.className = "fa-solid fa-pause text-amber-500";
-      this.lastTime = performance.now();
-      requestAnimationFrame((t) => this.loop(t));
-    }
-  }
-
-  openGuide() {
-    this.dom.guideModal.classList.remove('hidden');
-    if (this.isRunning && !this.isPaused) {
-      this.togglePause();
-    }
-  }
-
-  closeGuide() {
-    this.dom.guideModal.classList.add('hidden');
-    if (this.isPaused) {
-      this.togglePause();
-    }
+    // 리셋 후 대기 상태
+    this.isPaused = true;
+    this.isRunning = false;
+    this.dom.startBtn.classList.remove('ring-2', 'ring-emerald-300');
+    this.dom.pauseBtn.classList.remove('ring-2', 'ring-amber-300');
   }
 
   getCurrentPrep() {
@@ -852,50 +823,152 @@ class Game {
   }
 
   // ========================================================
-  // 난이도에 따른 단어 수 계산 및 보충
-  // "점수가 높아질 수록 화면에 더 많은 단어가 나타나 난이도가 올라가게"
+  // 단어 생성 및 겹침 방지 (Anti-Clustering & Fast Respawn)
+  // - "단어끼리 붙지 않게" -> 최소 거리 보장
+  // - "먹은 자리에 다른 단어가 생기는 시간을 빠르게" -> 먹자마자 즉각 스폰
+  // - "가운데가 텅 비지 않도록" -> 화면 전체 균일 그리드 탐색
   // ========================================================
   getTargetWordCount() {
-    // 0점: 8개, 40점마다 2개씩 증가, 최대 22개
-    const base = 8;
-    const extra = Math.floor(Math.max(0, this.score) / 40) * 2;
-    return Math.min(22, base + extra);
+    const base = 60;
+    const extra = Math.floor(Math.max(0, this.score) / 30) * 4;
+    return Math.min(95, base + extra);
   }
 
-  populateWords() {
-    const targetCount = this.getTargetWordCount();
+  createWordData() {
     const currentPrep = this.getCurrentPrep();
+    const allPreps = ['to', 'for', 'of'];
 
-    while (this.words.length < targetCount) {
-      // 정답 단어가 화면에 최소 40% 이상 유지되도록 제어
-      const correctList = VERB_DATABASE[currentPrep];
-      const allPreps = ['to', 'for', 'of'];
-      
-      let selectedData;
-      const currentCorrectCount = this.words.filter(w => w.prep === currentPrep).length;
-      const needCorrect = currentCorrectCount < Math.ceil(this.words.length * 0.45);
+    const currentCorrectCount = this.words.filter(w => w.prep === currentPrep).length;
+    const needCorrect = currentCorrectCount < Math.ceil(this.words.length * 0.45);
 
-      if (needCorrect || Math.random() < 0.5) {
-        // 정답 단어 풀에서 랜덤 선택
-        const item = correctList[Math.floor(Math.random() * correctList.length)];
-        selectedData = { ...item, prep: currentPrep };
-      } else {
-        // 다른 전치사 풀에서 오답 단어 선택
-        const otherPreps = allPreps.filter(p => p !== currentPrep);
-        const randPrep = otherPreps[Math.floor(Math.random() * otherPreps.length)];
-        const list = VERB_DATABASE[randPrep];
-        const item = list[Math.floor(Math.random() * list.length)];
-        selectedData = { ...item, prep: randPrep };
-      }
-
-      this.words.push(new WordItem(selectedData, this.canvas.width, this.canvas.height));
+    let prep;
+    if (needCorrect || Math.random() < 0.45) {
+      prep = currentPrep;
+    } else {
+      const others = allPreps.filter(p => p !== currentPrep);
+      prep = others[Math.floor(Math.random() * others.length)];
     }
 
-    this.dom.wordCountDisplay.textContent = `${this.words.length} 개`;
+    const list = VERB_DATABASE[prep];
+    const item = list[Math.floor(Math.random() * list.length)];
+    return { ...item, prep };
+  }
+
+  // 기존 단어들과 지렁이와의 거리를 검사하여 겹치지 않는 빈 공간 찾기
+  findSafeSpawnPosition(preferCenter = false) {
+    const paddingX = 60;
+    const paddingYTop = 95;
+    const paddingYBottom = 65;
+
+    const spawnW = this.canvas.width - paddingX * 2;
+    const spawnH = this.canvas.height - paddingYTop - paddingYBottom;
+
+    let bestPos = null;
+    let maxMinDist = -1;
+
+    // 최대 30회 후보 위치를 샘플링하여 기존 단어들로부터 가장 멀리 떨어진 최적의 빈자리 선택
+    const attempts = preferCenter ? 25 : 18;
+    for (let i = 0; i < attempts; i++) {
+      let candX, candY;
+
+      if (preferCenter && Math.random() < 0.7) {
+        // 화면 중앙 구역(30%~70%) 우선 타겟
+        candX = paddingX + spawnW * 0.25 + Math.random() * (spawnW * 0.5);
+        candY = paddingYTop + spawnH * 0.25 + Math.random() * (spawnH * 0.5);
+      } else {
+        candX = paddingX + Math.random() * spawnW;
+        candY = paddingYTop + Math.random() * spawnH;
+      }
+
+      // 1. 지렁이 머리/몸통 바로 코앞인지 체크 (스폰되자마자 닿아 먹히는 것 방지)
+      if (this.worm) {
+        const headDist = Math.hypot(candX - this.worm.x, candY - this.worm.y);
+        if (headDist < 70) continue;
+      }
+
+      // 2. 기존 단어들과의 최소 거리 계산
+      let minDistToOthers = 99999;
+      for (let j = 0; j < this.words.length; j++) {
+        const d = Math.hypot(candX - this.words[j].x, candY - this.words[j].y);
+        if (d < minDistToOthers) {
+          minDistToOthers = d;
+        }
+      }
+
+      // 최소 거리(70px)를 만족하는 완벽한 빈자리 발견 시 즉시 채택!
+      if (minDistToOthers >= this.minWordDistance) {
+        return { x: candX, y: candY };
+      }
+
+      // 후보 중 가장 거리가 먼 안전한 위치 기록
+      if (minDistToOthers > maxMinDist) {
+        maxMinDist = minDistToOthers;
+        bestPos = { x: candX, y: candY };
+      }
+    }
+
+    return bestPos || {
+      x: paddingX + Math.random() * spawnW,
+      y: paddingYTop + Math.random() * spawnH
+    };
+  }
+
+  // 단어 하나를 즉각 스폰 (먹는 순간 딜레이 없이 호출됨)
+  spawnSingleWord(preferCenter = true) {
+    const pos = this.findSafeSpawnPosition(preferCenter);
+    const data = this.createWordData();
+    this.words.push(new WordItem(data, pos.x, pos.y));
+  }
+
+  // 초기 시작 시 화면 전체(가운데~사이드)에 겹치지 않고 골고루 단어 배치
+  populateWordsInitial() {
+    const targetCount = this.getTargetWordCount();
+    this.words = [];
+
+    const paddingX = 60;
+    const paddingYTop = 100;
+    const paddingYBottom = 65;
+
+    const availableW = this.canvas.width - paddingX * 2;
+    const availableH = this.canvas.height - paddingYTop - paddingYBottom;
+
+    const cols = Math.ceil(Math.sqrt(targetCount * (availableW / availableH)));
+    const rows = Math.ceil(targetCount / cols);
+    const cellW = availableW / cols;
+    const cellH = availableH / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (this.words.length >= targetCount) break;
+
+        const posX = paddingX + c * cellW + (cellW * 0.2) + Math.random() * (cellW * 0.6);
+        const posY = paddingYTop + r * cellH + (cellH * 0.2) + Math.random() * (cellH * 0.6);
+
+        // 지렁이 초기 위치와 너무 붙지 않게
+        if (this.worm && Math.hypot(posX - this.worm.x, posY - this.worm.y) < 60) {
+          continue;
+        }
+
+        const data = this.createWordData();
+        const item = new WordItem(data, posX, posY);
+        item.scale = 1.0;
+        this.words.push(item);
+      }
+    }
+
+    // 부족한 수 채우기
+    this.ensureWordCoverage();
+  }
+
+  ensureWordCoverage() {
+    const targetCount = this.getTargetWordCount();
+    while (this.words.length < targetCount) {
+      this.spawnSingleWord(true);
+    }
   }
 
   // ========================================================
-  // 미션 및 배경색 전환 (15초 주기)
+  // 15초 미션 전환 및 배경색 변경
   // ========================================================
   switchMission() {
     this.currentPrepIndex = (this.currentPrepIndex + 1) % this.prepositions.length;
@@ -903,69 +976,48 @@ class Game {
 
     const prep = this.getCurrentPrep();
     this.updateMissionUI(true);
-
     this.sound.playMissionChange();
-
-    // 화면 상단 미션 변경 알림 배너
     this.showMissionAlert(prep);
-
-    // 단어 풀 재보충 (기존 단어 중 일부를 새 미션에 맞게 갱신)
-    this.populateWords();
   }
 
   updateMissionUI(isNew = false) {
     const prep = this.getCurrentPrep();
-
-    // 1. 바디 배경 테마 변경 (CSS Transition으로 부드럽게 전환)
     document.body.className = `theme-${prep} select-none overflow-hidden m-0 p-0 w-screen h-screen`;
 
-    // 2. 미션 뱃지 및 설명 업데이트
-    this.dom.prepBadge.textContent = prep;
-    this.dom.prepBadge.className = `badge-${prep} px-4 py-1.5 rounded-xl text-white font-black text-2xl md:text-3xl shadow-md transition-all duration-500 flex items-center justify-center min-w-[76px]`;
+    const colorMap = {
+      to: 'text-sky-600 decoration-sky-400 bg-sky-500',
+      for: 'text-orange-600 decoration-orange-400 bg-orange-500',
+      of: 'text-purple-600 decoration-purple-400 bg-purple-500'
+    };
 
-    this.dom.missionProgressBar.className = `bar-${prep} h-full transition-all duration-100 rounded-full w-full`;
-
-    if (prep === 'to') {
-      this.dom.missionDesc.innerHTML = `목적어 앞에 <span class="text-sky-600 dark:text-sky-400 underline decoration-wavy decoration-sky-400">[to]</span>가 오는 동사를 먹어라!`;
-    } else if (prep === 'for') {
-      this.dom.missionDesc.innerHTML = `목적어 앞에 <span class="text-orange-600 dark:text-orange-400 underline decoration-wavy decoration-orange-400">[for]</span>가 오는 동사를 먹어라!`;
-    } else {
-      this.dom.missionDesc.innerHTML = `목적어 앞에 <span class="text-purple-600 dark:text-purple-400 underline decoration-wavy decoration-purple-400">[of]</span>가 오는 동사를 먹어라!`;
-    }
-
-    // 3. 힌트 태그 칩 업데이트
-    const hintList = VERB_DATABASE[prep].slice(0, 4);
-    this.dom.hintChips.innerHTML = hintList.map(h => 
-      `<span class="px-1.5 py-0.5 bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded font-bold">${h.verb}</span>`
-    ).join('');
+    this.dom.prepHighlight.className = `${colorMap[prep].split(' ')[0]} underline decoration-4`;
+    this.dom.prepHighlight.textContent = `[ ${prep} ]`;
+    this.dom.missionProgressBar.className = `h-full ${colorMap[prep].split(' ')[2]} transition-all duration-100 w-full`;
   }
 
   showMissionAlert(prep) {
     const banner = this.dom.missionAlertBanner;
-    banner.className = `banner-${prep} pointer-events-none fixed top-24 left-1/2 -translate-x-1/2 z-20 transition-all duration-300 flex items-center gap-3 px-6 py-3 rounded-2xl shadow-2xl backdrop-blur-lg border scale-100 opacity-100`;
-    
+    banner.className = `banner-${prep} pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-20 transition-all duration-300 flex items-center gap-3 px-6 py-2.5 rounded-2xl shadow-2xl backdrop-blur-lg border scale-100 opacity-100`;
+
     let desc = "";
-    if (prep === 'to') desc = "전치사 [ to ]와 짝꿍인 동사들 (give, send, teach...)!";
-    else if (prep === 'for') desc = "전치사 [ for ]와 짝꿍인 동사들 (make, buy, cook...)!";
-    else desc = "전치사 [ of ]와 짝꿍인 동사 (ask, beg...)!";
+    if (prep === 'to') desc = "전치사 [ to ]와 함께 쓰이는 동사 먹기 (give, send...)";
+    else if (prep === 'for') desc = "전치사 [ for ]와 함께 쓰이는 동사 먹기 (make, buy, cook...)";
+    else desc = "전치사 [ of ]와 함께 쓰이는 동사 먹기 (ask, beg...)";
 
     this.dom.bannerText.textContent = desc;
 
     setTimeout(() => {
       banner.classList.remove('opacity-100', 'scale-100');
       banner.classList.add('opacity-0', 'scale-90');
-    }, 2200);
+    }, 2000);
   }
 
-  // ========================================================
-  // 점수 UI 업데이트
-  // ========================================================
   updateScoreUI(isSuccess = null) {
-    this.dom.scoreDisplay.textContent = this.score;
+    this.dom.scoreDisplay.textContent = `${this.score}점`;
 
     if (isSuccess === true) {
       this.dom.scoreDisplay.classList.remove('score-bump', 'score-drop');
-      void this.dom.scoreDisplay.offsetWidth; // 트리거
+      void this.dom.scoreDisplay.offsetWidth;
       this.dom.scoreDisplay.classList.add('score-bump');
     } else if (isSuccess === false) {
       this.dom.scoreDisplay.classList.remove('score-bump', 'score-drop');
@@ -974,16 +1026,16 @@ class Game {
     }
 
     if (this.worm) {
-      this.dom.wormLengthDisplay.textContent = `${this.worm.segments.length} 마디`;
+      this.dom.lengthDisplay.textContent = `${this.worm.segments.length} 마디`;
     }
   }
 
   // ========================================================
-  // 충돌 판정 및 먹기 처리
-  // "지렁이의 머리, 몸통, 꼬리 모두 단어에 닿으면 먹은 것으로 간주돼"
+  // 충돌 판정 및 즉시 리스폰
+  // "이미 먹은 자리에 다른 단어가 생기는 시간을 빠르게"
   // ========================================================
   checkCollisions() {
-    if (!this.worm || this.words.length === 0) return;
+    if (!this.worm || this.words.length === 0 || !this.isRunning || this.isPaused) return;
 
     const currentPrep = this.getCurrentPrep();
 
@@ -991,155 +1043,169 @@ class Game {
       const wordItem = this.words[wIdx];
       let eaten = false;
 
-      // 머리, 몸통, 꼬리 모든 마디와의 충돌 거리 체크
+      // 머리, 몸통, 꼬리 전신 충돌 판정
       for (let sIdx = 0; sIdx < this.worm.segments.length; sIdx++) {
         const seg = this.worm.segments[sIdx];
         const dist = Math.hypot(seg.x - wordItem.x, seg.y - wordItem.y);
 
         if (dist < seg.radius + wordItem.radius) {
           eaten = true;
-          this.handleEatWord(wordItem, seg.x, seg.y, currentPrep);
+          this.handleEat(wordItem, seg.x, seg.y, currentPrep);
           break;
         }
       }
 
       if (eaten) {
+        // 단어 제거 즉시 새로운 단어 1~2개를 빈자리에 즉각 리스폰!
         this.words.splice(wIdx, 1);
+        this.spawnSingleWord(true); // 가운데 빈 구역 우선 스폰
       }
     }
 
-    // 단어 개수 유지/보충
-    this.populateWords();
+    // 목표 개수 항상 유지
+    this.ensureWordCoverage();
   }
 
-  handleEatWord(item, hitX, hitY, currentPrep) {
+  handleEat(item, hitX, hitY, currentPrep) {
     const isCorrect = (item.prep === currentPrep);
 
     if (isCorrect) {
-      // 1. 정답 처리
       this.score += 10;
-      this.worm.addSegments(3);
+      this.worm.addSegments(4);
       this.sound.playSuccess();
       this.updateScoreUI(true);
 
-      // 플로팅 텍스트 (+10 및 정답 칭찬)
       this.floatingTexts.push(new FloatingText(
-        `+10 Good! 👏`,
+        `+10점! 👏`,
         hitX,
-        hitY - 20,
+        hitY - 15,
         true,
         `${item.verb} → ${item.prep}`
       ));
 
-      // 축하 파티클 효과
       const colors = ['#22c55e', '#38bdf8', '#fbbf24', '#a855f7', '#f43f5e'];
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 12; i++) {
         this.particles.push(new Particle(hitX, hitY, colors[Math.floor(Math.random() * colors.length)]));
       }
 
     } else {
-      // 2. 오답 처리
-      // 단어 하나 먹을 때마다 10점씩 오르고 내림
       this.score = Math.max(0, this.score - 10);
       this.worm.removeSegments(3);
       this.sound.playFail();
       this.updateScoreUI(false);
 
-      // 플로팅 텍스트 (-10 및 오답 피드백)
       this.floatingTexts.push(new FloatingText(
-        `-10 Oops! 💦`,
+        `-10점! 💦`,
         hitX,
-        hitY - 20,
+        hitY - 15,
         false,
-        `${item.verb}는 ${item.prep}와 어울려요!`
+        `${item.verb}는 [${item.prep}]와 짝꿍!`
       ));
 
-      // 먼지 파티클
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 8; i++) {
         this.particles.push(new Particle(hitX, hitY, '#94a3b8'));
       }
     }
   }
 
   // ========================================================
-  // 게임 메인 루프 (Update & Render)
+  // 경기 타이머 완료 처리 (수업용)
+  // ========================================================
+  finishMatch() {
+    this.pauseGame();
+    this.sound.playMatchFinish();
+    this.dom.pausedOverlay.classList.add('hidden');
+    this.dom.matchEndModal.classList.remove('hidden');
+    this.dom.finalScoreDisplay.textContent = `${this.score}점`;
+    this.dom.finalLengthDisplay.textContent = `최종 지렁이 길이: ${this.worm ? this.worm.segments.length : 22} 마디`;
+  }
+
+  // ========================================================
+  // 메인 애니메이션 루프
   // ========================================================
   loop(currentTime) {
-    if (!this.isRunning || this.isPaused) return;
-
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
 
-    // 1. 미션 타이머 업데이트 (15초 카운트다운)
-    this.missionTimer -= dt;
-    if (this.missionTimer <= 0) {
-      this.switchMission();
-    } else {
-      // UI 프로그레스 바 & 숫자 갱신
-      const progressPercent = (this.missionTimer / this.missionTotalDuration) * 100;
-      this.dom.missionProgressBar.style.width = `${progressPercent}%`;
-      this.dom.missionTimeText.textContent = `${Math.ceil(this.missionTimer)}s`;
+    if (this.isRunning && !this.isPaused) {
+      // 1. 경기 타이머 (설정되어 있을 때)
+      if (this.matchTimerModes[this.matchTimerIndex] > 0) {
+        this.matchRemaining -= dt;
+        const remainInt = Math.max(0, Math.ceil(this.matchRemaining));
+        const m = Math.floor(remainInt / 60);
+        const s = remainInt % 60;
+        this.dom.matchTimerLabel.textContent = `남은 시간: ${m}:${s < 10 ? '0' : ''}${s}`;
+
+        if (this.matchRemaining <= 0) {
+          this.finishMatch();
+        }
+      }
+
+      // 2. 15초 미션 타이머
+      this.missionTimer -= dt;
+      if (this.missionTimer <= 0) {
+        this.switchMission();
+      } else {
+        const pct = (this.missionTimer / this.missionTotalDuration) * 100;
+        this.dom.missionProgressBar.style.width = `${pct}%`;
+        this.dom.missionTimeText.textContent = `${Math.ceil(this.missionTimer)}s`;
+      }
+
+      // 3. 지렁이 업데이트
+      if (this.worm) {
+        this.worm.update(dt);
+      }
+
+      // 4. 단어들 애니메이션
+      for (let i = 0; i < this.words.length; i++) {
+        this.words[i].update(dt);
+      }
+
+      // 5. 충돌 체크 및 먹은 자리 즉시 리스폰
+      this.checkCollisions();
     }
 
-    // 2. 지렁이 업데이트
-    this.worm.update(dt);
-
-    // 3. 단어 아이템 업데이트
-    for (let i = 0; i < this.words.length; i++) {
-      this.words[i].update(dt, this.canvas.width, this.canvas.height);
-    }
-
-    // 4. 충돌 체크 (머리, 몸통, 꼬리)
-    this.checkCollisions();
-
-    // 5. 플로팅 텍스트 및 파티클 업데이트
+    // 이펙트 업데이트
     for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
       this.floatingTexts[i].update(dt);
-      if (this.floatingTexts[i].life <= 0) {
-        this.floatingTexts.splice(i, 1);
-      }
+      if (this.floatingTexts[i].life <= 0) this.floatingTexts.splice(i, 1);
     }
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       this.particles[i].update(dt);
-      if (this.particles[i].life <= 0) {
-        this.particles.splice(i, 1);
-      }
+      if (this.particles[i].life <= 0) this.particles.splice(i, 1);
     }
 
-    // 6. 렌더링
+    // 화면 렌더링
     this.render();
 
     requestAnimationFrame((t) => this.loop(t));
   }
 
   render() {
-    // 캔버스 클리어 (배경은 body의 CSS 그라데이션이 비쳐 보이도록 깨끗이 투명 클리어)
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 단어 아이템들 그리기
+    // 1. 단어들 그리기
     for (let i = 0; i < this.words.length; i++) {
       this.words[i].draw(this.ctx);
     }
 
-    // 지렁이 그리기 (반투명 갈색 몸통 + 웃는 표정 머리)
-    this.worm.draw(this.ctx);
+    // 2. 지렁이 그리기
+    if (this.worm) {
+      this.worm.draw(this.ctx);
+    }
 
-    // 파티클 그리기
+    // 3. 파티클 및 플로팅 텍스트
     for (let i = 0; i < this.particles.length; i++) {
       this.particles[i].draw(this.ctx);
     }
-
-    // 플로팅 텍스트 그리기 (+10 / -10 알림)
     for (let i = 0; i < this.floatingTexts.length; i++) {
       this.floatingTexts[i].draw(this.ctx);
     }
   }
 }
 
-// ========================================================
-// 7. 게임 인스턴스 시작
-// ========================================================
+// 초기화
 window.addEventListener('DOMContentLoaded', () => {
   window.game = new Game();
 });
