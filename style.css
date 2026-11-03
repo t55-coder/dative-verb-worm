@@ -1,0 +1,182 @@
+@charset "UTF-8";
+
+/* ========================================================
+   전체 폰트 및 기본 세팅
+   ======================================================== */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Fredoka', 'Jua', 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: crosshair;
+}
+
+/* ========================================================
+   미션별 배경 테마 (15초마다 스무스하게 전환)
+   ======================================================== */
+body.theme-to {
+  background: radial-gradient(circle at 50% 30%, #e0f2fe 0%, #bae6fd 45%, #7dd3fc 100%);
+}
+
+body.theme-for {
+  background: radial-gradient(circle at 50% 30%, #ffedd5 0%, #fed7aa 45%, #fdba74 100%);
+}
+
+body.theme-of {
+  background: radial-gradient(circle at 50% 30%, #f3e8ff 0%, #e9d5ff 45%, #d8b4fe 100%);
+}
+
+/* 다크 모드 또는 대비를 위한 미세 그리드 패턴 (지렁이 이동 속도감 향상) */
+body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(rgba(0, 0, 0, 0.04) 1.5px, transparent 1.5px),
+    radial-gradient(rgba(255, 255, 255, 0.4) 1.5px, transparent 1.5px);
+  background-size: 36px 36px;
+  background-position: 0 0, 18px 18px;
+  opacity: 0.8;
+  z-index: 1;
+}
+
+/* 캔버스 기본 */
+#gameCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  cursor: grab;
+}
+
+#gameCanvas:active {
+  cursor: grabbing;
+}
+
+/* ========================================================
+   미션 뱃지 색상 테마
+   ======================================================== */
+.badge-to {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  box-shadow: 0 8px 20px -4px rgba(2, 132, 199, 0.5);
+}
+
+.badge-for {
+  background: linear-gradient(135deg, #ea580c, #f59e0b);
+  box-shadow: 0 8px 20px -4px rgba(234, 88, 12, 0.5);
+}
+
+.badge-of {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  box-shadow: 0 8px 20px -4px rgba(124, 58, 237, 0.5);
+}
+
+/* 타이머 바 그라데이션 */
+.bar-to {
+  background: linear-gradient(90deg, #38bdf8, #2563eb);
+}
+.bar-for {
+  background: linear-gradient(90deg, #fb923c, #ea580c);
+}
+.bar-of {
+  background: linear-gradient(90deg, #c084fc, #7c3aed);
+}
+
+/* 미션 전환 알림 배너 스타일 */
+.banner-to {
+  background: rgba(14, 116, 144, 0.92);
+  color: #ffffff;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.banner-for {
+  background: rgba(194, 65, 12, 0.92);
+  color: #ffffff;
+  border-color: rgba(251, 146, 60, 0.4);
+}
+.banner-of {
+  background: rgba(109, 40, 217, 0.92);
+  color: #ffffff;
+  border-color: rgba(192, 132, 252, 0.4);
+}
+
+/* ========================================================
+   애니메이션 키프레임
+   ======================================================== */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spinSlow 8s linear infinite;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+
+.animate-wiggle {
+  animation: wiggle 1.6s ease-in-out infinite;
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-pop {
+  animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* 점수 획득 시 튀는 애니메이션 클래스 */
+.score-bump {
+  animation: scoreBump 0.28s ease-out;
+}
+
+@keyframes scoreBump {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); color: #16a34a; }
+  100% { transform: scale(1); }
+}
+
+.score-drop {
+  animation: scoreDrop 0.28s ease-out;
+}
+
+@keyframes scoreDrop {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.85); color: #dc2626; }
+  100% { transform: scale(1); }
+}
+
+/* 스크롤바 커스텀 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
