@@ -1,8 +1,9 @@
 /**
- * 수여동사 냠냠 지렁이 게임 (Dative Verb Worm Game)
- * - 단어끼리 절대 겹치지 않는 최소 거리 보장 알고리즘
- * - 먹은 즉시 가운데 빈 공간에 빠르게 리스폰
- * - 교실 수업용 [시작], [일시정지], [점수 리셋], [경기 타이머] 완벽 지원
+ * 수여동사 냠냠 지렁이 게임 (Dative Verb Worm Game) - 3분 챌린지 모드
+ * - 미션 지속 시간: 30초마다 변경 ([to] -> [for] -> [of])
+ * - 전체 경기 제한시간: 3분 (180초) 타임어택!
+ * - 단어를 먹으면 화면의 모든 단어가 싹 사라지고 0.14초 만에 새로운 판이 쫙 깔림
+ * - 3분 종료 시 팡파레와 함께 최종 점수 모달 & [다시하기] 버튼 제공
  */
 
 // ========================================================
@@ -132,12 +133,12 @@ class SoundManager {
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + i * 0.08);
-      gain.gain.setValueAtTime(0.2, now + i * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.4);
+      gain.gain.setValueAtTime(0.22, now + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.45);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now + i * 0.08);
-      osc.stop(now + i * 0.08 + 0.42);
+      osc.stop(now + i * 0.08 + 0.48);
     });
   }
 
@@ -148,7 +149,7 @@ class SoundManager {
 }
 
 // ========================================================
-// 3. 플로팅 텍스트 & 파티클
+// 3. 플로팅 텍스트 & 파티클 시스템
 // ========================================================
 class FloatingText {
   constructor(text, x, y, isSuccess, subText = "") {
@@ -227,7 +228,6 @@ class Particle {
 
 // ========================================================
 // 4. 단어 아이템 (WordItem) 클래스
-// - 영상 스타일: 예쁜 원형 도트 + 단어 + 한글 뜻
 // ========================================================
 class WordItem {
   constructor(data, x, y) {
@@ -240,14 +240,14 @@ class WordItem {
     this.y = y;
 
     this.floatOffset = Math.random() * Math.PI * 2;
-    this.radius = 24; // 충돌 반경
-    this.scale = 0;   // 스폰 시 통통 튀며 생기는 팝 애니메이션
+    this.radius = 24;
+    this.scale = 0.1; // 새 판 깔릴 때 팝업
   }
 
   update(dt) {
     this.floatOffset += 0.03 * (dt * 60);
     if (this.scale < 1.0) {
-      this.scale = Math.min(1.0, this.scale + 0.12 * (dt * 60));
+      this.scale = Math.min(1.0, this.scale + 0.18 * (dt * 60));
     }
   }
 
@@ -259,7 +259,7 @@ class WordItem {
       ctx.scale(this.scale, this.scale);
     }
 
-    // 1. 작은 컬러풀 도트
+    // 도트
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetY = 2;
@@ -269,14 +269,13 @@ class WordItem {
     ctx.arc(-24, 0, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    // 도트 안쪽 하이라이트
     ctx.shadowColor = 'transparent';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.beginPath();
     ctx.arc(-26, -2, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. 단어 텍스트
+    // 단어 텍스트
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
@@ -300,10 +299,6 @@ class WordItem {
 
 // ========================================================
 // 5. 지렁이 (Worm) 클래스
-// - 영상 속 매끄러운 튜브/소시지 일체형 젤리 바디
-// - 색상: 반투명 갈색
-// - 표정: 방긋 웃는 표정
-// - 전신 충돌 판정: 머리, 몸통, 꼬리 모두 단어 섭취
 // ========================================================
 class Worm {
   constructor(startX, startY) {
@@ -430,7 +425,7 @@ class Worm {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // 1. 하단 그림자
+    // 그림자
     ctx.lineWidth = this.bodyRadius * 2 + 4;
     ctx.strokeStyle = 'rgba(90, 45, 15, 0.12)';
     ctx.beginPath();
@@ -440,7 +435,7 @@ class Worm {
     }
     ctx.stroke();
 
-    // 2. 반투명 갈색 튜브
+    // 반투명 갈색 바디
     ctx.lineWidth = this.bodyRadius * 2;
     ctx.strokeStyle = 'rgba(175, 105, 55, 0.78)';
     ctx.beginPath();
@@ -450,7 +445,7 @@ class Worm {
     }
     ctx.stroke();
 
-    // 3. 내부 젤리 하이라이트
+    // 젤리 하이라이트
     ctx.lineWidth = this.bodyRadius * 0.9;
     ctx.strokeStyle = 'rgba(235, 165, 115, 0.35)';
     ctx.beginPath();
@@ -460,9 +455,8 @@ class Worm {
     }
     ctx.stroke();
 
-    // 4. 머리 및 웃는 표정
+    // 머리
     this.drawHead(ctx);
-
     ctx.restore();
   }
 
@@ -534,7 +528,6 @@ class Worm {
       });
     }
 
-    // 방긋 웃는 입
     const mouthX = r * 0.6;
     if (this.expression === 'eating') {
       ctx.fillStyle = '#be123c';
@@ -567,7 +560,7 @@ class Worm {
 }
 
 // ========================================================
-// 6. 게임 메인 매니저
+// 6. 게임 메인 매니저 (3분 타임어택 & 30초 미션)
 // ========================================================
 class Game {
   constructor() {
@@ -580,16 +573,15 @@ class Game {
     this.isRunning = false;
     this.isPaused = false;
 
-    // 미션 시스템 (15초마다 변경)
+    // 미션 시스템: 30초마다 변경!
     this.prepositions = ['to', 'for', 'of'];
     this.currentPrepIndex = 0;
-    this.missionTimer = 15.0;
-    this.missionTotalDuration = 15.0;
+    this.missionTimer = 30.0;          // 30초 카운트다운
+    this.missionTotalDuration = 30.0;
 
-    // 수업용 경기 타이머 (무제한, 60초, 120초, 180초)
-    this.matchTimerModes = [0, 60, 120, 180];
-    this.matchTimerIndex = 0; // 0 = 무제한
-    this.matchRemaining = 0;
+    // 전체 경기 제한시간: 3분 (180초) 타임어택!
+    this.matchTotalDuration = 180.0;    // 3분
+    this.matchRemaining = 180.0;
 
     // 객체 목록
     this.worm = null;
@@ -598,22 +590,19 @@ class Game {
     this.particles = [];
 
     this.lastTime = 0;
-
-    // 단어 간 최소 거리 (겹침 방지)
-    this.minWordDistance = 72; // 단어끼리 절대 붙지 않도록 보장하는 거리
+    this.isRespawning = false;
 
     this.dom = {
       missionText: document.getElementById('missionText'),
       prepHighlight: document.getElementById('prepHighlight'),
       missionTimeText: document.getElementById('missionTimeText'),
       missionProgressBar: document.getElementById('missionProgressBar'),
+      matchClock: document.getElementById('matchClock'),
       scoreDisplay: document.getElementById('scoreDisplay'),
       lengthDisplay: document.getElementById('lengthDisplay'),
       startBtn: document.getElementById('startBtn'),
       pauseBtn: document.getElementById('pauseBtn'),
       resetBtn: document.getElementById('resetBtn'),
-      matchTimerBtn: document.getElementById('matchTimerBtn'),
-      matchTimerLabel: document.getElementById('matchTimerLabel'),
       soundBtn: document.getElementById('soundBtn'),
       soundIcon: document.getElementById('soundIcon'),
       guideBtn: document.getElementById('guideBtn'),
@@ -639,7 +628,7 @@ class Game {
     this.resizeCanvas();
     window.addEventListener('resize', () => {
       this.resizeCanvas();
-      this.ensureWordCoverage();
+      this.spawnWholeScreenWords();
     });
 
     const handleMove = (e) => {
@@ -662,7 +651,6 @@ class Game {
       handleMove(e);
     }, { passive: false });
 
-    // 스페이스바로 일시정지 토글
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
@@ -672,31 +660,30 @@ class Game {
 
     this.bindEvents();
 
-    // 초기 상태 세팅 (일시정지 대기 상태로 단어들과 지렁이 배치)
+    // 초기 상태 세팅 (일시정지 대기 상태)
     this.worm = new Worm(this.canvas.width / 2, this.canvas.height / 2);
-    this.words = [];
-    this.populateWordsInitial();
+    this.spawnWholeScreenWords();
     this.updateMissionUI(false);
     this.updateScoreUI();
+    this.updateMatchClockUI();
 
-    // 초기 시작 안내
     this.lastTime = performance.now();
     requestAnimationFrame((t) => this.loop(t));
   }
 
   bindEvents() {
-    // 1. [시작] 버튼
+    // 1. 시작 버튼
     this.dom.startBtn.addEventListener('click', () => {
       this.sound.init();
       this.resumeGame();
     });
 
-    // 2. [일시정지] 버튼
+    // 2. 일시정지 버튼
     this.dom.pauseBtn.addEventListener('click', () => {
       this.pauseGame();
     });
 
-    // 3. [점수 리셋] 버튼
+    // 3. 처음부터 리셋 버튼
     this.dom.resetBtn.addEventListener('click', () => {
       this.resetGame();
     });
@@ -710,22 +697,11 @@ class Game {
       this.resetGame();
     });
 
+    // 5. 3분 타임오버 후 "다시하기" 버튼
     this.dom.playAgainBtn.addEventListener('click', () => {
       this.dom.matchEndModal.classList.add('hidden');
       this.resetGame();
       this.resumeGame();
-    });
-
-    // 5. 경기 타이머 모드 변경 버튼 (무제한 -> 1분 -> 2분 -> 3분)
-    this.dom.matchTimerBtn.addEventListener('click', () => {
-      this.matchTimerIndex = (this.matchTimerIndex + 1) % this.matchTimerModes.length;
-      const modeSec = this.matchTimerModes[this.matchTimerIndex];
-      this.matchRemaining = modeSec;
-      if (modeSec === 0) {
-        this.dom.matchTimerLabel.textContent = "타이머: 무제한";
-      } else {
-        this.dom.matchTimerLabel.textContent = `타이머: ${modeSec / 60}분`;
-      }
     });
 
     // 6. 소리 및 도감 버튼
@@ -755,9 +731,6 @@ class Game {
     this.canvas.height = window.innerHeight;
   }
 
-  // ========================================================
-  // 게임 컨트롤 상태 제어
-  // ========================================================
   resumeGame() {
     this.isRunning = true;
     this.isPaused = false;
@@ -791,27 +764,24 @@ class Game {
     this.score = 0;
     this.updateScoreUI();
     this.currentPrepIndex = 0;
-    this.missionTimer = this.missionTotalDuration;
-
-    if (this.matchTimerModes[this.matchTimerIndex] > 0) {
-      this.matchRemaining = this.matchTimerModes[this.matchTimerIndex];
-    }
+    this.missionTimer = this.missionTotalDuration; // 30초 리셋
+    this.matchRemaining = this.matchTotalDuration; // 3분 리셋
+    this.updateMatchClockUI();
 
     if (this.worm) {
       this.worm.reset(this.canvas.width / 2, this.canvas.height / 2);
     }
 
-    this.words = [];
     this.floatingTexts = [];
     this.particles = [];
+    this.isRespawning = false;
 
-    this.populateWordsInitial();
+    this.spawnWholeScreenWords();
     this.updateMissionUI(true);
 
     this.dom.pausedOverlay.classList.add('hidden');
     this.dom.matchEndModal.classList.add('hidden');
 
-    // 리셋 후 대기 상태
     this.isPaused = true;
     this.isRunning = false;
     this.dom.startBtn.classList.remove('ring-2', 'ring-emerald-300');
@@ -822,12 +792,6 @@ class Game {
     return this.prepositions[this.currentPrepIndex];
   }
 
-  // ========================================================
-  // 단어 생성 및 겹침 방지 (Anti-Clustering & Fast Respawn)
-  // - "단어끼리 붙지 않게" -> 최소 거리 보장
-  // - "먹은 자리에 다른 단어가 생기는 시간을 빠르게" -> 먹자마자 즉각 스폰
-  // - "가운데가 텅 비지 않도록" -> 화면 전체 균일 그리드 탐색
-  // ========================================================
   getTargetWordCount() {
     const base = 60;
     const extra = Math.floor(Math.max(0, this.score) / 30) * 4;
@@ -838,8 +802,8 @@ class Game {
     const currentPrep = this.getCurrentPrep();
     const allPreps = ['to', 'for', 'of'];
 
-    const currentCorrectCount = this.words.filter(w => w.prep === currentPrep).length;
-    const needCorrect = currentCorrectCount < Math.ceil(this.words.length * 0.45);
+    const currentCorrect = this.words.filter(w => w.prep === currentPrep).length;
+    const needCorrect = currentCorrect < Math.ceil(this.words.length * 0.45);
 
     let prep;
     if (needCorrect || Math.random() < 0.45) {
@@ -854,80 +818,14 @@ class Game {
     return { ...item, prep };
   }
 
-  // 기존 단어들과 지렁이와의 거리를 검사하여 겹치지 않는 빈 공간 찾기
-  findSafeSpawnPosition(preferCenter = false) {
-    const paddingX = 60;
-    const paddingYTop = 95;
-    const paddingYBottom = 65;
-
-    const spawnW = this.canvas.width - paddingX * 2;
-    const spawnH = this.canvas.height - paddingYTop - paddingYBottom;
-
-    let bestPos = null;
-    let maxMinDist = -1;
-
-    // 최대 30회 후보 위치를 샘플링하여 기존 단어들로부터 가장 멀리 떨어진 최적의 빈자리 선택
-    const attempts = preferCenter ? 25 : 18;
-    for (let i = 0; i < attempts; i++) {
-      let candX, candY;
-
-      if (preferCenter && Math.random() < 0.7) {
-        // 화면 중앙 구역(30%~70%) 우선 타겟
-        candX = paddingX + spawnW * 0.25 + Math.random() * (spawnW * 0.5);
-        candY = paddingYTop + spawnH * 0.25 + Math.random() * (spawnH * 0.5);
-      } else {
-        candX = paddingX + Math.random() * spawnW;
-        candY = paddingYTop + Math.random() * spawnH;
-      }
-
-      // 1. 지렁이 머리/몸통 바로 코앞인지 체크 (스폰되자마자 닿아 먹히는 것 방지)
-      if (this.worm) {
-        const headDist = Math.hypot(candX - this.worm.x, candY - this.worm.y);
-        if (headDist < 70) continue;
-      }
-
-      // 2. 기존 단어들과의 최소 거리 계산
-      let minDistToOthers = 99999;
-      for (let j = 0; j < this.words.length; j++) {
-        const d = Math.hypot(candX - this.words[j].x, candY - this.words[j].y);
-        if (d < minDistToOthers) {
-          minDistToOthers = d;
-        }
-      }
-
-      // 최소 거리(70px)를 만족하는 완벽한 빈자리 발견 시 즉시 채택!
-      if (minDistToOthers >= this.minWordDistance) {
-        return { x: candX, y: candY };
-      }
-
-      // 후보 중 가장 거리가 먼 안전한 위치 기록
-      if (minDistToOthers > maxMinDist) {
-        maxMinDist = minDistToOthers;
-        bestPos = { x: candX, y: candY };
-      }
-    }
-
-    return bestPos || {
-      x: paddingX + Math.random() * spawnW,
-      y: paddingYTop + Math.random() * spawnH
-    };
-  }
-
-  // 단어 하나를 즉각 스폰 (먹는 순간 딜레이 없이 호출됨)
-  spawnSingleWord(preferCenter = true) {
-    const pos = this.findSafeSpawnPosition(preferCenter);
-    const data = this.createWordData();
-    this.words.push(new WordItem(data, pos.x, pos.y));
-  }
-
-  // 초기 시작 시 화면 전체(가운데~사이드)에 겹치지 않고 골고루 단어 배치
-  populateWordsInitial() {
+  // 화면 전체에 단어들을 겹치지 않고 골고루 쫙 까는 함수 (새 판 깔기)
+  spawnWholeScreenWords() {
     const targetCount = this.getTargetWordCount();
     this.words = [];
 
-    const paddingX = 60;
-    const paddingYTop = 100;
-    const paddingYBottom = 65;
+    const paddingX = 55;
+    const paddingYTop = 95;
+    const paddingYBottom = 60;
 
     const availableW = this.canvas.width - paddingX * 2;
     const availableH = this.canvas.height - paddingYTop - paddingYBottom;
@@ -944,40 +842,45 @@ class Game {
         const posX = paddingX + c * cellW + (cellW * 0.2) + Math.random() * (cellW * 0.6);
         const posY = paddingYTop + r * cellH + (cellH * 0.2) + Math.random() * (cellH * 0.6);
 
-        // 지렁이 초기 위치와 너무 붙지 않게
-        if (this.worm && Math.hypot(posX - this.worm.x, posY - this.worm.y) < 60) {
+        if (this.worm && Math.hypot(posX - this.worm.x, posY - this.worm.y) < 70) {
           continue;
         }
 
         const data = this.createWordData();
         const item = new WordItem(data, posX, posY);
-        item.scale = 1.0;
         this.words.push(item);
       }
     }
-
-    // 부족한 수 채우기
-    this.ensureWordCoverage();
   }
 
-  ensureWordCoverage() {
-    const targetCount = this.getTargetWordCount();
-    while (this.words.length < targetCount) {
-      this.spawnSingleWord(true);
-    }
+  // 단어 먹었을 때 0.14초 만에 새 판 쫙 깔기
+  triggerBoardRefresh() {
+    if (this.isRespawning) return;
+    this.isRespawning = true;
+
+    this.words = [];
+
+    setTimeout(() => {
+      if (this.isRunning && !this.isPaused) {
+        this.spawnWholeScreenWords();
+      }
+      this.isRespawning = false;
+    }, 140);
   }
 
   // ========================================================
-  // 15초 미션 전환 및 배경색 변경
+  // 30초 미션 전환 및 배경색 변경
   // ========================================================
   switchMission() {
     this.currentPrepIndex = (this.currentPrepIndex + 1) % this.prepositions.length;
-    this.missionTimer = this.missionTotalDuration;
+    this.missionTimer = this.missionTotalDuration; // 30초
 
     const prep = this.getCurrentPrep();
     this.updateMissionUI(true);
     this.sound.playMissionChange();
     this.showMissionAlert(prep);
+
+    this.spawnWholeScreenWords();
   }
 
   updateMissionUI(isNew = false) {
@@ -1030,40 +933,44 @@ class Game {
     }
   }
 
+  // 3분 경기 시계 UI 포맷팅 (MM:SS)
+  updateMatchClockUI() {
+    const remainInt = Math.max(0, Math.ceil(this.matchRemaining));
+    const m = Math.floor(remainInt / 60);
+    const s = remainInt % 60;
+    const str = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    this.dom.matchClock.textContent = str;
+
+    // 마지막 30초 남았을 때 붉은색 강조
+    if (remainInt <= 30) {
+      this.dom.matchClock.className = "font-mono text-lg md:text-xl font-black text-rose-600 animate-pulse leading-tight";
+    } else {
+      this.dom.matchClock.className = "font-mono text-lg md:text-xl font-black text-indigo-700 leading-tight";
+    }
+  }
+
   // ========================================================
-  // 충돌 판정 및 즉시 리스폰
-  // "이미 먹은 자리에 다른 단어가 생기는 시간을 빠르게"
+  // 충돌 판정
   // ========================================================
   checkCollisions() {
-    if (!this.worm || this.words.length === 0 || !this.isRunning || this.isPaused) return;
+    if (!this.worm || this.words.length === 0 || !this.isRunning || this.isPaused || this.isRespawning) return;
 
     const currentPrep = this.getCurrentPrep();
 
-    for (let wIdx = this.words.length - 1; wIdx >= 0; wIdx--) {
+    for (let wIdx = 0; wIdx < this.words.length; wIdx++) {
       const wordItem = this.words[wIdx];
-      let eaten = false;
 
-      // 머리, 몸통, 꼬리 전신 충돌 판정
       for (let sIdx = 0; sIdx < this.worm.segments.length; sIdx++) {
         const seg = this.worm.segments[sIdx];
         const dist = Math.hypot(seg.x - wordItem.x, seg.y - wordItem.y);
 
         if (dist < seg.radius + wordItem.radius) {
-          eaten = true;
           this.handleEat(wordItem, seg.x, seg.y, currentPrep);
-          break;
+          this.triggerBoardRefresh();
+          return;
         }
       }
-
-      if (eaten) {
-        // 단어 제거 즉시 새로운 단어 1~2개를 빈자리에 즉각 리스폰!
-        this.words.splice(wIdx, 1);
-        this.spawnSingleWord(true); // 가운데 빈 구역 우선 스폰
-      }
     }
-
-    // 목표 개수 항상 유지
-    this.ensureWordCoverage();
   }
 
   handleEat(item, hitX, hitY, currentPrep) {
@@ -1084,7 +991,7 @@ class Game {
       ));
 
       const colors = ['#22c55e', '#38bdf8', '#fbbf24', '#a855f7', '#f43f5e'];
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 14; i++) {
         this.particles.push(new Particle(hitX, hitY, colors[Math.floor(Math.random() * colors.length)]));
       }
 
@@ -1108,11 +1015,10 @@ class Game {
     }
   }
 
-  // ========================================================
-  // 경기 타이머 완료 처리 (수업용)
-  // ========================================================
+  // 3분 종료 시 자동 실행
   finishMatch() {
-    this.pauseGame();
+    this.isPaused = true;
+    this.isRunning = false;
     this.sound.playMatchFinish();
     this.dom.pausedOverlay.classList.add('hidden');
     this.dom.matchEndModal.classList.remove('hidden');
@@ -1121,27 +1027,25 @@ class Game {
   }
 
   // ========================================================
-  // 메인 애니메이션 루프
+  // 메인 루프
   // ========================================================
   loop(currentTime) {
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
 
     if (this.isRunning && !this.isPaused) {
-      // 1. 경기 타이머 (설정되어 있을 때)
-      if (this.matchTimerModes[this.matchTimerIndex] > 0) {
-        this.matchRemaining -= dt;
-        const remainInt = Math.max(0, Math.ceil(this.matchRemaining));
-        const m = Math.floor(remainInt / 60);
-        const s = remainInt % 60;
-        this.dom.matchTimerLabel.textContent = `남은 시간: ${m}:${s < 10 ? '0' : ''}${s}`;
+      // 1. 전체 경기 3분 타이머 카운트다운
+      this.matchRemaining -= dt;
+      this.updateMatchClockUI();
 
-        if (this.matchRemaining <= 0) {
-          this.finishMatch();
-        }
+      if (this.matchRemaining <= 0) {
+        this.matchRemaining = 0;
+        this.updateMatchClockUI();
+        this.finishMatch();
+        return;
       }
 
-      // 2. 15초 미션 타이머
+      // 2. 30초 미션 타이머
       this.missionTimer -= dt;
       if (this.missionTimer <= 0) {
         this.switchMission();
@@ -1151,17 +1055,17 @@ class Game {
         this.dom.missionTimeText.textContent = `${Math.ceil(this.missionTimer)}s`;
       }
 
-      // 3. 지렁이 업데이트
+      // 3. 지렁이
       if (this.worm) {
         this.worm.update(dt);
       }
 
-      // 4. 단어들 애니메이션
+      // 4. 단어 애니메이션
       for (let i = 0; i < this.words.length; i++) {
         this.words[i].update(dt);
       }
 
-      // 5. 충돌 체크 및 먹은 자리 즉시 리스폰
+      // 5. 충돌 체크 (단어 먹으면 다 사라지고 0.14초 리스폰)
       this.checkCollisions();
     }
 
@@ -1176,26 +1080,21 @@ class Game {
       if (this.particles[i].life <= 0) this.particles.splice(i, 1);
     }
 
-    // 화면 렌더링
     this.render();
-
     requestAnimationFrame((t) => this.loop(t));
   }
 
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 1. 단어들 그리기
     for (let i = 0; i < this.words.length; i++) {
       this.words[i].draw(this.ctx);
     }
 
-    // 2. 지렁이 그리기
     if (this.worm) {
       this.worm.draw(this.ctx);
     }
 
-    // 3. 파티클 및 플로팅 텍스트
     for (let i = 0; i < this.particles.length; i++) {
       this.particles[i].draw(this.ctx);
     }
@@ -1205,7 +1104,6 @@ class Game {
   }
 }
 
-// 초기화
 window.addEventListener('DOMContentLoaded', () => {
   window.game = new Game();
 });
