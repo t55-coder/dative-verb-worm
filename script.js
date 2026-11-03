@@ -1,8 +1,8 @@
 /**
  * 수여동사 냠냠 지렁이 게임 (Dative Verb Worm Game) - 3분 챌린지 모드
+ * - 기존 단어들은 그대로 유지되고, 먹은 단어만 그 즉시 새로운 단어로 리스폰!
  * - 미션 주기: 30초마다 자동 변경 ([to] -> [for] -> [of])
  * - 전체 경기 시간: 3분 (180초) 타임어택!
- * - 단어를 먹으면 모든 단어가 사라지고 0.14초 만에 새로운 판이 쫙 깔림
  * - 3분 종료 시 팡파레 & 최종 점수 발표 & [다시하기] 버튼
  */
 
@@ -228,7 +228,7 @@ class Particle {
 
 // ========================================================
 // 4. 단어 아이템 (WordItem) 클래스
-// scale = 1.0 기본 보장으로 화면에 항상 즉시 선명하게 표시!
+// 영상 레퍼런스 스타일: 깔끔한 컬러 도트 + 텍스트 + 한글 뜻
 // ========================================================
 class WordItem {
   constructor(data, x, y) {
@@ -274,7 +274,6 @@ class WordItem {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
-    // 영문 동사
     ctx.font = 'bold 16px Fredoka, sans-serif';
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = '#ffffff';
@@ -282,7 +281,6 @@ class WordItem {
     ctx.fillStyle = '#0f172a';
     ctx.fillText(this.verb, -10, -5);
 
-    // 한글 뜻
     ctx.font = '700 11px "Noto Sans KR", sans-serif';
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2.5;
@@ -432,7 +430,7 @@ class Worm {
     }
     ctx.stroke();
 
-    // 반투명 갈색 튜브 몸통
+    // 반투명 갈색 바디
     ctx.lineWidth = this.bodyRadius * 2;
     ctx.strokeStyle = 'rgba(175, 105, 55, 0.8)';
     ctx.beginPath();
@@ -586,7 +584,6 @@ class Game {
     this.particles = [];
 
     this.lastTime = 0;
-    this.isRespawning = false;
 
     this.dom = {
       missionText: document.getElementById('missionText'),
@@ -658,7 +655,7 @@ class Game {
 
     this.bindEvents();
 
-    // 초기 상태 세팅 (지렁이와 단어들이 화면에 꽉 찬 상태로 대기)
+    // 초기 상태 세팅 (단어들이 화면에 꽉 찬 상태로 대기)
     this.worm = new Worm(this.canvas.width / 2, this.canvas.height / 2);
     this.spawnWholeScreenWords();
     this.updateMissionUI(false);
@@ -670,23 +667,19 @@ class Game {
   }
 
   bindEvents() {
-    // 1. 시작 버튼
     this.dom.startBtn.addEventListener('click', () => {
       this.sound.init();
       this.resumeGame();
     });
 
-    // 2. 일시정지 버튼
     this.dom.pauseBtn.addEventListener('click', () => {
       this.pauseGame();
     });
 
-    // 3. 처음부터 리셋 버튼
     this.dom.resetBtn.addEventListener('click', () => {
       this.resetGame();
     });
 
-    // 4. 모달 내부 버튼들
     this.dom.resumeModalBtn.addEventListener('click', () => {
       this.resumeGame();
     });
@@ -695,14 +688,12 @@ class Game {
       this.resetGame();
     });
 
-    // 5. 3분 종료 후 다시하기 버튼
     this.dom.playAgainBtn.addEventListener('click', () => {
       this.dom.matchEndModal.classList.add('hidden');
       this.resetGame();
       this.resumeGame();
     });
 
-    // 6. 소리 및 도감 버튼
     this.dom.soundBtn.addEventListener('click', () => {
       const isMuted = this.sound.toggleMute();
       this.dom.soundIcon.className = isMuted 
@@ -738,7 +729,6 @@ class Game {
     this.dom.startBtn.classList.add('ring-2', 'ring-emerald-300');
     this.dom.pauseBtn.classList.remove('ring-2', 'ring-amber-300');
 
-    // 혹시라도 단어가 없으면 즉시 생성 보장!
     if (!this.words || this.words.length === 0) {
       this.spawnWholeScreenWords();
     }
@@ -777,7 +767,6 @@ class Game {
 
     this.floatingTexts = [];
     this.particles = [];
-    this.isRespawning = false;
 
     this.spawnWholeScreenWords();
     this.updateMissionUI(true);
@@ -821,7 +810,7 @@ class Game {
     return { ...item, prep };
   }
 
-  // 화면 전체에 단어들을 겹치지 않고 골고루 쫙 까는 함수 (안전 가드 완비)
+  // 초기 시작/리셋 시 화면 전체에 단어들을 골고루 쫙 까는 함수
   spawnWholeScreenWords() {
     const targetCount = this.getTargetWordCount();
     this.words = [];
@@ -850,7 +839,6 @@ class Game {
         const posX = paddingX + c * cellW + (cellW * 0.15) + Math.random() * (cellW * 0.7);
         const posY = paddingYTop + r * cellH + (cellH * 0.15) + Math.random() * (cellH * 0.7);
 
-        // 지렁이 머리 바로 앞 60px만 피해서 스폰
         if (this.worm && Math.hypot(posX - this.worm.x, posY - this.worm.y) < 60) {
           continue;
         }
@@ -861,7 +849,6 @@ class Game {
       }
     }
 
-    // 만약 지렁이 회피 등으로 단어 수가 모자라면 안전하게 보충
     while (this.words.length < targetCount) {
       const posX = paddingX + Math.random() * availableW;
       const posY = paddingYTop + Math.random() * availableH;
@@ -870,18 +857,59 @@ class Game {
     }
   }
 
-  triggerBoardRefresh() {
-    if (this.isRespawning) return;
-    this.isRespawning = true;
+  // ========================================================
+  // 핵심 요구사항 반영:
+  // "기존 단어들은 그대로 두고, 먹은 단어만 그 즉시 새로운 단어로 리스폰!"
+  // 먹힌 위치 근처 또는 비어 있는 공간을 찾아 즉시 생성하여 채워 넣음
+  // ========================================================
+  spawnSingleReplacementWord(originX, originY) {
+    const paddingX = 50;
+    const paddingYTop = 95;
+    const paddingYBottom = 60;
 
-    this.words = [];
+    const availableW = Math.max(300, this.canvas.width - paddingX * 2);
+    const availableH = Math.max(200, this.canvas.height - paddingYTop - paddingYBottom);
 
-    setTimeout(() => {
-      if (this.isRunning && !this.isPaused) {
-        this.spawnWholeScreenWords();
+    let spawnX, spawnY;
+    let found = false;
+
+    // 1차 시도: 방금 먹어서 빈 공간이 된 위치 주변(반경 60~150px)에서 지렁이와 겹치지 않는 빈자리 탐색
+    for (let i = 0; i < 15; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * 90;
+      const candX = Math.min(this.canvas.width - paddingX, Math.max(paddingX, originX + Math.cos(angle) * dist));
+      const candY = Math.min(this.canvas.height - paddingYBottom, Math.max(paddingYTop, originY + Math.sin(angle) * dist));
+
+      // 지렁이 머리 바로 앞 피하기
+      if (this.worm && Math.hypot(candX - this.worm.x, candY - this.worm.y) < 60) {
+        continue;
       }
-      this.isRespawning = false;
-    }, 140);
+
+      // 다른 단어들과 겹치는지 체크
+      let tooClose = false;
+      for (let j = 0; j < this.words.length; j++) {
+        if (Math.hypot(candX - this.words[j].x, candY - this.words[j].y) < 55) {
+          tooClose = true;
+          break;
+        }
+      }
+
+      if (!tooClose) {
+        spawnX = candX;
+        spawnY = candY;
+        found = true;
+        break;
+      }
+    }
+
+    // 2차 시도: 화면 전체 빈 공간 중 안전한 위치 탐색
+    if (!found) {
+      spawnX = paddingX + Math.random() * availableW;
+      spawnY = paddingYTop + Math.random() * availableH;
+    }
+
+    const data = this.createWordData();
+    this.words.push(new WordItem(data, spawnX, spawnY));
   }
 
   // 30초 미션 전환
@@ -893,8 +921,6 @@ class Game {
     this.updateMissionUI(true);
     this.sound.playMissionChange();
     this.showMissionAlert(prep);
-
-    this.spawnWholeScreenWords();
   }
 
   updateMissionUI(isNew = false) {
@@ -961,12 +987,16 @@ class Game {
     }
   }
 
+  // ========================================================
+  // 충돌 판정 및 개별 단어 즉시 리스폰
+  // (있는 단어는 그대로 두고, 먹은 단어만 새로운 단어로 즉시 리스폰!)
+  // ========================================================
   checkCollisions() {
-    if (!this.worm || this.words.length === 0 || !this.isRunning || this.isPaused || this.isRespawning) return;
+    if (!this.worm || this.words.length === 0 || !this.isRunning || this.isPaused) return;
 
     const currentPrep = this.getCurrentPrep();
 
-    for (let wIdx = 0; wIdx < this.words.length; wIdx++) {
+    for (let wIdx = this.words.length - 1; wIdx >= 0; wIdx--) {
       const wordItem = this.words[wIdx];
 
       for (let sIdx = 0; sIdx < this.worm.segments.length; sIdx++) {
@@ -974,9 +1004,18 @@ class Game {
         const dist = Math.hypot(seg.x - wordItem.x, seg.y - wordItem.y);
 
         if (dist < seg.radius + wordItem.radius) {
+          const eatenX = wordItem.x;
+          const eatenY = wordItem.y;
+
+          // 1. 점수 및 효과음 처리
           this.handleEat(wordItem, seg.x, seg.y, currentPrep);
-          this.triggerBoardRefresh();
-          return;
+
+          // 2. 먹은 바로 그 단어만 제거 (다른 단어들은 절대 건드리지 않음!)
+          this.words.splice(wIdx, 1);
+
+          // 3. 먹은 자리에 새로운 단어를 딜레이 없이 즉시 1개 리스폰!
+          this.spawnSingleReplacementWord(eatenX, eatenY);
+          break;
         }
       }
     }
@@ -1065,11 +1104,11 @@ class Game {
         this.worm.update(dt);
       }
 
-      // 4. 충돌 체크 (단어 먹으면 싹 사라지고 0.14초 리스폰)
+      // 4. 충돌 체크 (먹은 단어만 쏙 빠지고 즉시 리스폰)
       this.checkCollisions();
     }
 
-    // 단어 부유 애니메이션 (일시정지 중에도 둥실둥실 살아서 보이게)
+    // 단어 부유 애니메이션
     for (let i = 0; i < this.words.length; i++) {
       this.words[i].update(dt);
     }
@@ -1092,17 +1131,14 @@ class Game {
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 1. 단어들 그리기 (화면 가득 60~80개 단어 표시)
     for (let i = 0; i < this.words.length; i++) {
       this.words[i].draw(this.ctx);
     }
 
-    // 2. 지렁이 그리기
     if (this.worm) {
       this.worm.draw(this.ctx);
     }
 
-    // 3. 파티클 및 플로팅 텍스트
     for (let i = 0; i < this.particles.length; i++) {
       this.particles[i].draw(this.ctx);
     }
