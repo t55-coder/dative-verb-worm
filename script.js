@@ -303,12 +303,14 @@ class Worm {
     this.targetY = startY;
 
     this.angle = 0;
-    this.speed = 4.8;
+    this.speed = 8.5; // 기존 4.8에서 8.5로 대폭 상향하여 빠릿빠릿한 이동!
     this.bodyRadius = 18;
 
     this.segments = [];
-    this.segmentSpacing = 7;
-    const initialSegments = 22;
+    this.segmentSpacing = 8;
+    this.maxSegments = 24; // 최대 꼬리 길이 상한선! (지나치게 길어짐 방지)
+    this.minSegments = 10;
+    const initialSegments = 14; // 귀엽고 적당한 초기 길이
 
     for (let i = 0; i < initialSegments; i++) {
       this.segments.push({
@@ -330,7 +332,7 @@ class Worm {
     this.targetY = y;
     this.angle = 0;
     this.segments = [];
-    const initialSegments = 22;
+    const initialSegments = 14;
     for (let i = 0; i < initialSegments; i++) {
       this.segments.push({
         x: x - i * this.segmentSpacing,
@@ -341,25 +343,29 @@ class Worm {
     this.expression = 'happy';
   }
 
-  addSegments(count = 4) {
-    const last = this.segments[this.segments.length - 1];
-    for (let i = 0; i < count; i++) {
-      this.segments.push({
-        x: last.x,
-        y: last.y,
-        radius: this.bodyRadius
-      });
+  // 꼬리가 너무 길어지지 않도록 한 번에 +1마디만 증가 & 최대 24마디 제한!
+  addSegments(count = 1) {
+    if (this.segments.length < this.maxSegments) {
+      const last = this.segments[this.segments.length - 1];
+      for (let i = 0; i < count; i++) {
+        if (this.segments.length >= this.maxSegments) break;
+        this.segments.push({
+          x: last.x,
+          y: last.y,
+          radius: this.bodyRadius
+        });
+      }
     }
-    this.setExpression('eating', 0.4);
+    this.setExpression('eating', 0.35);
   }
 
-  removeSegments(count = 3) {
-    const minLength = 14;
-    const removeCount = Math.min(count, Math.max(0, this.segments.length - minLength));
+  // 오답 시 1마디 감소, 최소 10마디 유지
+  removeSegments(count = 1) {
+    const removeCount = Math.min(count, Math.max(0, this.segments.length - this.minSegments));
     for (let i = 0; i < removeCount; i++) {
       this.segments.pop();
     }
-    this.setExpression('oops', 0.5);
+    this.setExpression('oops', 0.45);
   }
 
   setExpression(expr, duration) {
@@ -383,14 +389,17 @@ class Worm {
     const dy = this.targetY - this.y;
     const distToTarget = Math.hypot(dx, dy);
 
-    if (distToTarget > 6) {
+    if (distToTarget > 4) {
       const targetAngle = Math.atan2(dy, dx);
       let diff = targetAngle - this.angle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
-      this.angle += diff * Math.min(1, 0.16 * (dt * 60));
 
-      const moveSpeed = Math.min(this.speed, distToTarget * 0.16) * (dt * 60);
+      // 회전 반응 속도를 기존 0.16에서 0.34로 2배 이상 민첩하게 향상!
+      this.angle += diff * Math.min(1, 0.34 * (dt * 60));
+
+      // 이동 속도: 마우스 방향으로 시원시원하고 빠릿하게 전진!
+      const moveSpeed = Math.min(this.speed, Math.max(3.8, distToTarget * 0.28)) * (dt * 60);
       this.x += Math.cos(this.angle) * moveSpeed;
       this.y += Math.sin(this.angle) * moveSpeed;
     }
@@ -784,10 +793,13 @@ class Game {
     return this.prepositions[this.currentPrepIndex];
   }
 
+  // ========================================================
+  // 단어 수 대폭 슬림화: 학생들이 쾌적하게 읽고 찾을 수 있는 최적의 개수 (25~32개)
+  // ========================================================
   getTargetWordCount() {
-    const base = 60;
-    const extra = Math.floor(Math.max(0, this.score) / 30) * 4;
-    return Math.min(95, base + extra);
+    const base = 25; // 기존 60~95개에서 25개로 대폭 축소!
+    const extra = Math.floor(Math.max(0, this.score) / 60) * 2;
+    return Math.min(32, base + extra);
   }
 
   createWordData() {
@@ -810,7 +822,9 @@ class Game {
     return { ...item, prep };
   }
 
-  // 초기 시작/리셋 시 화면 전체에 단어들을 골고루 쫙 까는 함수
+  // ========================================================
+  // 초기/리셋 단어 생성: 그리드 기반으로 단어끼리 절대 겹치지 않게(No Overlap) 배치!
+  // ========================================================
   spawnWholeScreenWords() {
     const targetCount = this.getTargetWordCount();
     this.words = [];
@@ -820,96 +834,111 @@ class Game {
     this.canvas.width = w;
     this.canvas.height = h;
 
-    const paddingX = 50;
-    const paddingYTop = 95;
-    const paddingYBottom = 60;
+    const paddingX = 70;
+    const paddingYTop = 100;
+    const paddingYBottom = 70;
 
-    const availableW = Math.max(300, w - paddingX * 2);
-    const availableH = Math.max(200, h - paddingYTop - paddingYBottom);
+    const availableW = Math.max(400, w - paddingX * 2);
+    const availableH = Math.max(300, h - paddingYTop - paddingYBottom);
 
-    const cols = Math.max(5, Math.ceil(Math.sqrt(targetCount * (availableW / availableH))));
-    const rows = Math.max(4, Math.ceil(targetCount / cols));
+    // 25~32개의 단어를 6열 x 5행(총 30개 셀) 또는 7열 x 5행(총 35개 셀)으로 넉넉하게 분할
+    const cols = 6;
+    const rows = 5;
     const cellW = availableW / cols;
     const cellH = availableH / rows;
 
+    // 셀 인덱스들을 셔플하여 고르게 분포
+    const cellSlots = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (this.words.length >= targetCount) break;
-
-        const posX = paddingX + c * cellW + (cellW * 0.15) + Math.random() * (cellW * 0.7);
-        const posY = paddingYTop + r * cellH + (cellH * 0.15) + Math.random() * (cellH * 0.7);
-
-        if (this.worm && Math.hypot(posX - this.worm.x, posY - this.worm.y) < 60) {
-          continue;
-        }
-
-        const data = this.createWordData();
-        const item = new WordItem(data, posX, posY);
-        this.words.push(item);
+        cellSlots.push({ r, c });
       }
     }
+    // 무작위 셔플
+    for (let i = cellSlots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cellSlots[i], cellSlots[j]] = [cellSlots[j], cellSlots[i]];
+    }
 
-    while (this.words.length < targetCount) {
-      const posX = paddingX + Math.random() * availableW;
-      const posY = paddingYTop + Math.random() * availableH;
+    // 각 셀마다 최대 1개의 단어만 배치하여 물리적으로 겹침을 100% 원천 차단!
+    for (let i = 0; i < cellSlots.length; i++) {
+      if (this.words.length >= targetCount) break;
+
+      const { r, c } = cellSlots[i];
+      // 셀 중심에서 약간의 자연스러운 지터 (셀 범위 내에 머물러 이웃 셀 단어와 겹치지 않음)
+      const posX = paddingX + c * cellW + cellW * 0.5 + (Math.random() - 0.5) * (cellW * 0.35);
+      const posY = paddingYTop + r * cellH + cellH * 0.5 + (Math.random() - 0.5) * (cellH * 0.35);
+
+      // 지렁이 머리 바로 앞 70px은 스폰 회피
+      if (this.worm && Math.hypot(posX - this.worm.x, posY - this.worm.y) < 70) {
+        continue;
+      }
+
       const data = this.createWordData();
       this.words.push(new WordItem(data, posX, posY));
     }
   }
 
   // ========================================================
-  // 핵심 요구사항 반영:
-  // "기존 단어들은 그대로 두고, 먹은 단어만 그 즉시 새로운 단어로 리스폰!"
-  // 먹힌 위치 근처 또는 비어 있는 공간을 찾아 즉시 생성하여 채워 넣음
+  // 개별 리스폰: 먹은 단어 자리를 채울 때 기존 단어들과 절대 겹치지 않게(거리 100px 이상) 스폰!
   // ========================================================
   spawnSingleReplacementWord(originX, originY) {
-    const paddingX = 50;
-    const paddingYTop = 95;
-    const paddingYBottom = 60;
+    const paddingX = 70;
+    const paddingYTop = 100;
+    const paddingYBottom = 70;
 
-    const availableW = Math.max(300, this.canvas.width - paddingX * 2);
-    const availableH = Math.max(200, this.canvas.height - paddingYTop - paddingYBottom);
+    const availableW = Math.max(400, this.canvas.width - paddingX * 2);
+    const availableH = Math.max(300, this.canvas.height - paddingYTop - paddingYBottom);
 
-    let spawnX, spawnY;
-    let found = false;
+    const minDistance = 105; // 단어 사이 최소 안전 거리 (절대 겹치지 않음!)
+    let bestPos = null;
+    let maxMinDist = -1;
 
-    // 1차 시도: 방금 먹어서 빈 공간이 된 위치 주변(반경 60~150px)에서 지렁이와 겹치지 않는 빈자리 탐색
-    for (let i = 0; i < 15; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 60 + Math.random() * 90;
-      const candX = Math.min(this.canvas.width - paddingX, Math.max(paddingX, originX + Math.cos(angle) * dist));
-      const candY = Math.min(this.canvas.height - paddingYBottom, Math.max(paddingYTop, originY + Math.sin(angle) * dist));
+    // 최대 45회 무작위 후보지를 검사하여 기존 단어들로부터 가장 멀리 떨어진 안전한 빈 공간 선택
+    for (let i = 0; i < 45; i++) {
+      let candX, candY;
 
-      // 지렁이 머리 바로 앞 피하기
-      if (this.worm && Math.hypot(candX - this.worm.x, candY - this.worm.y) < 60) {
+      // 절반은 먹힌 위치 주변(반경 80~180px), 절반은 화면 전체 빈 공간 탐색
+      if (i < 20) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 80 + Math.random() * 100;
+        candX = Math.min(this.canvas.width - paddingX, Math.max(paddingX, originX + Math.cos(angle) * dist));
+        candY = Math.min(this.canvas.height - paddingYBottom, Math.max(paddingYTop, originY + Math.sin(angle) * dist));
+      } else {
+        candX = paddingX + Math.random() * availableW;
+        candY = paddingYTop + Math.random() * availableH;
+      }
+
+      // 지렁이 머리/몸통 앞 70px 피하기
+      if (this.worm && Math.hypot(candX - this.worm.x, candY - this.worm.y) < 70) {
         continue;
       }
 
-      // 다른 단어들과 겹치는지 체크
-      let tooClose = false;
+      // 기존 모든 단어들과의 거리 측정
+      let currentMinDist = 99999;
       for (let j = 0; j < this.words.length; j++) {
-        if (Math.hypot(candX - this.words[j].x, candY - this.words[j].y) < 55) {
-          tooClose = true;
-          break;
+        const d = Math.hypot(candX - this.words[j].x, candY - this.words[j].y);
+        if (d < currentMinDist) {
+          currentMinDist = d;
         }
       }
 
-      if (!tooClose) {
-        spawnX = candX;
-        spawnY = candY;
-        found = true;
+      // 105px 이상 충분히 떨어진 완벽한 빈자리 발견 시 즉시 채택!
+      if (currentMinDist >= minDistance) {
+        bestPos = { x: candX, y: candY };
         break;
+      }
+
+      if (currentMinDist > maxMinDist) {
+        maxMinDist = currentMinDist;
+        bestPos = { x: candX, y: candY };
       }
     }
 
-    // 2차 시도: 화면 전체 빈 공간 중 안전한 위치 탐색
-    if (!found) {
-      spawnX = paddingX + Math.random() * availableW;
-      spawnY = paddingYTop + Math.random() * availableH;
+    if (bestPos) {
+      const data = this.createWordData();
+      this.words.push(new WordItem(data, bestPos.x, bestPos.y));
     }
-
-    const data = this.createWordData();
-    this.words.push(new WordItem(data, spawnX, spawnY));
   }
 
   // 30초 미션 전환
@@ -1013,9 +1042,11 @@ class Game {
           // 2. 먹은 바로 그 단어만 제거 (다른 단어들은 절대 건드리지 않음!)
           this.words.splice(wIdx, 1);
 
-          // 3. 먹은 자리에 새로운 단어를 딜레이 없이 즉시 1개 리스폰!
+          // 3. 먹은 자리에 새로운 단어를 겹치지 않는 안전한 빈 공간에 즉시 1개 리스폰!
           this.spawnSingleReplacementWord(eatenX, eatenY);
-          break;
+
+          // 4. 한 프레임에 단어 1개만 깔끔하게 섭취되도록 즉시 종료 (연쇄 동시 섭취 원천 차단!)
+          return;
         }
       }
     }
@@ -1026,7 +1057,7 @@ class Game {
 
     if (isCorrect) {
       this.score += 10;
-      this.worm.addSegments(4);
+      this.worm.addSegments(1); // 꼬리가 과도하게 길어지지 않도록 +1마디만 증가! (최대 24마디 제한)
       this.sound.playSuccess();
       this.updateScoreUI(true);
 
@@ -1045,7 +1076,7 @@ class Game {
 
     } else {
       this.score = Math.max(0, this.score - 10);
-      this.worm.removeSegments(3);
+      this.worm.removeSegments(1); // 오답 시 -1마디 감소 (최소 10마디 보장)
       this.sound.playFail();
       this.updateScoreUI(false);
 
